@@ -1,0 +1,72 @@
+[
+    {
+        "function_name": "napi_get_cb_info",
+        "operands": [
+            "%0",
+            "%1",
+            "int 2",
+            "top",
+            "top",
+            "top"
+        ],
+        "rets": {
+            "%2": -1,
+            "%3": 3,
+            "%4": 3
+        },
+        "type": "Call"
+    },
+    {
+        "function_name": "napi_get_value_double",
+        "operands": [
+            "%0",
+            "%3",
+            "top"
+        ],
+        "rets": {
+            "%5": -1,
+            "%6": 2
+        },
+        "type": "Call"
+    },
+    {
+        "function_name": "napi_get_value_double",
+        "operands": [
+            "%0",
+            "%4",
+            "top"
+        ],
+        "rets": {
+            "%7": -1,
+            "%8": 2
+        },
+        "type": "Call"
+    },
+    {
+        "operands": [
+            "%6",
+            "%8"
+        ],
+        "ret": "%9",
+        "type": "Phi"
+    },
+    {
+        "function_name": "napi_create_double",
+        "operands": [
+            "%0",
+            "%9",
+            "top"
+        ],
+        "rets": {
+            "%10": -1,
+            "%11": 2
+        },
+        "type": "Call"
+    },
+    {
+        "operands": [
+            "%11"
+        ],
+        "type": "Ret"
+    }
+]

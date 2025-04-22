@@ -1,0 +1,61 @@
+[
+    {
+        "function_name": "napi_get_cb_info",
+        "operands": [
+            "%0",
+            "%1",
+            "int 1",
+            "top",
+            "top",
+            "top"
+        ],
+        "rets": {
+            "%2": -1,
+            "%3": 3
+        },
+        "type": "Call"
+    },
+    {
+        "function_name": "napi_is_array",
+        "operands": [
+            "%0",
+            "%3",
+            "top"
+        ],
+        "rets": {
+            "%4": -1,
+            "%5": 2
+        },
+        "type": "Call"
+    },
+    {
+        "function_name": "napi_get_element",
+        "operands": [
+            "%0",
+            "%3",
+            "int 0",
+            "top"
+        ],
+        "rets": {
+            "%6": -1,
+            "%7": 3
+        },
+        "type": "Call"
+    },
+    {
+        "function_name": "OH_LOG_Print",
+        "operands": [
+            "int 0",
+            "int 4",
+            "int 0",
+            "top",
+            "char* Leak LastLocation %{public}s\u0000",
+            "top",
+            ""
+        ],
+        "rets": {
+            "%8": -1
+        },
+        "type": "Call"
+    }
+]

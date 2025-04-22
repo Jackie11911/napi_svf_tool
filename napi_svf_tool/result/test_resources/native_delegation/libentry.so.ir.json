@@ -1,0 +1,112 @@
+{
+    "hap_name": "@TEST_HAP_NAME",
+    "so_name": "@TEST_SO_NAME",
+    "module_name": "entry",
+    "functions": [
+        {
+            "name": "doLeak",
+            "params": {
+                "%a1": "napi_env",
+                "%a2": "napi_callback_info"
+            },
+            "instructions": [
+                {
+                    "callsite": "1055888",
+                    "target": "napi_get_cb_info",
+                    "operands": [
+                        "%a1",
+                        "%a2",
+                        "top",
+                        "top",
+                        "top",
+                        "top"
+                    ],
+                    "rets": {
+                        "%0": "-1",
+                        "%1": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1055904",
+                    "target": "napi_get_global",
+                    "operands": [
+                        "%a1",
+                        "top"
+                    ],
+                    "rets": {
+                        "%2": "-1",
+                        "%3": "1"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1055936",
+                    "target": "napi_call_function",
+                    "operands": [
+                        "%a1",
+                        "%3",
+                        "%1",
+                        "long 1",
+                        "top",
+                        "top"
+                    ],
+                    "rets": {
+                        "%4": "-1",
+                        "%5": "5"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1055948",
+                    "target": "malloc",
+                    "operands": [
+                        "long 256"
+                    ],
+                    "rets": {
+                        "%6": "-1"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1055976",
+                    "target": "napi_get_value_string_utf8",
+                    "operands": [
+                        "%a1",
+                        "%5",
+                        "%6",
+                        "long 256",
+                        "top"
+                    ],
+                    "rets": {
+                        "%7": "-1",
+                        "%8": "2",
+                        "%9": "4"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1056012",
+                    "target": "OH_LOG_Print",
+                    "operands": [
+                        "top",
+                        "top",
+                        "long 0",
+                        "null",
+                        "char* \"Oops! there is %{public}d leak: %{public}s\"",
+                        "long 1",
+                        "%6"
+                    ],
+                    "rets": {
+                        "%10": "-1"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "operand": "top",
+                    "type": "Ret"
+                }
+            ]
+        }
+    ]
+}

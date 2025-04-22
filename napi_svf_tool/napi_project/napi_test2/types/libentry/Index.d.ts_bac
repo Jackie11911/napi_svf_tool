@@ -1,0 +1,10 @@
+// export const add: (a: number, b: number) => number;
+// export const passDownString: (a: number) => number;
+// export const passDownNumber: (a: string) => string;
+// export const constNumber: () => number;
+// export const constString: () => string;
+// export const phiTest: () => number;
+// export const loadModule: () => string;
+// export const otherFunction: (a: number, b: number) => number;
+
+// export const logLeak: (s: string) => void;

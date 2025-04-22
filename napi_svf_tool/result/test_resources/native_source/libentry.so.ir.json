@@ -1,0 +1,67 @@
+{
+    "hap_name": "@TEST_HAP_NAME",
+    "so_name": "@TEST_SO_NAME",
+    "module_name": "entry",
+    "functions": [
+        {
+            "name": "callFunction",
+            "params": {
+                "%a1": "napi_env",
+                "%a2": "napi_callback_info"
+            },
+            "instructions": [
+                {
+                    "callsite": "1055624",
+                    "target": "napi_get_cb_info",
+                    "operands": [
+                        "%a1",
+                        "%a2",
+                        "top",
+                        "top",
+                        "top",
+                        "top"
+                    ],
+                    "rets": {
+                        "%0": "-1",
+                        "%1": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1055640",
+                    "target": "napi_get_global",
+                    "operands": [
+                        "%a1",
+                        "top"
+                    ],
+                    "rets": {
+                        "%2": "-1",
+                        "%3": "1"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1055672",
+                    "target": "napi_call_function",
+                    "operands": [
+                        "%a1",
+                        "%3",
+                        "%1",
+                        "long 1",
+                        "top",
+                        "top"
+                    ],
+                    "rets": {
+                        "%4": "-1",
+                        "%5": "5"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "operand": "%5",
+                    "type": "Ret"
+                }
+            ]
+        }
+    ]
+}

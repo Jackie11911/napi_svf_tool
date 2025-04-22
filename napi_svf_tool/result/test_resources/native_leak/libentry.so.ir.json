@@ -1,0 +1,81 @@
+{
+    "hap_name": "@TEST_HAP_NAME",
+    "so_name": "@TEST_SO_NAME",
+    "module_name": "entry",
+    "functions": [
+        {
+            "name": "leak",
+            "params": {
+                "%a1": "napi_env",
+                "%a2": "napi_callback_info"
+            },
+            "instructions": [
+                {
+                    "callsite": "1055720",
+                    "target": "napi_get_cb_info",
+                    "operands": [
+                        "%a1",
+                        "%a2",
+                        "top",
+                        "top",
+                        "top",
+                        "top"
+                    ],
+                    "rets": {
+                        "%0": "-1",
+                        "%1": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1055728",
+                    "target": "operator.new[]",
+                    "operands": [
+                        "long 256"
+                    ],
+                    "rets": {
+                        "%2": "-1"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1055756",
+                    "target": "napi_get_value_string_utf8",
+                    "operands": [
+                        "%a1",
+                        "%1",
+                        "%2",
+                        "long -1",
+                        "top"
+                    ],
+                    "rets": {
+                        "%3": "-1",
+                        "%4": "2",
+                        "%5": "4"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1055788",
+                    "target": "OH_LOG_Print",
+                    "operands": [
+                        "top",
+                        "top",
+                        "long 0",
+                        "null",
+                        "char* \"Leak LastLocation %{public}s\"",
+                        "%2"
+                    ],
+                    "rets": {
+                        "%6": "-1"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "operand": "top",
+                    "type": "Ret"
+                }
+            ]
+        }
+    ]
+}

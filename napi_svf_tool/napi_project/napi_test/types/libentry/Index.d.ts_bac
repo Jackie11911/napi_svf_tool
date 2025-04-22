@@ -1,0 +1,7 @@
+// export const add: (a: number, b: number) => number;
+// export const passDownString: (str: string) => string;
+// export const getString: () => string;
+// export const passDownNumber: (num: number) => number;
+// export const passDownBoolean: (bool: boolean) => boolean;
+// export const concatStrings: (str1: string, str2: string) => string;
+// export const callFunction: (func: Function) => string;

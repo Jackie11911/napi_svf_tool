@@ -1,0 +1,186 @@
+{
+    "hap_name": "@TEST_HAP_NAME",
+    "so_name": "@TEST_SO_NAME",
+    "module_name": "entry",
+    "functions": [
+        {
+            "name": "clean",
+            "params": {
+                "%a1": "napi_env",
+                "%a2": "napi_callback_info"
+            },
+            "instructions": [
+                {
+                    "callsite": "1055956",
+                    "target": "napi_get_cb_info",
+                    "operands": [
+                        "%a1",
+                        "%a2",
+                        "top",
+                        "top",
+                        "top",
+                        "top"
+                    ],
+                    "rets": {
+                        "%0": "-1",
+                        "%1": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1055988",
+                    "target": "napi_create_string_utf8",
+                    "operands": [
+                        "%a1",
+                        "char* \"Cleaned!\"",
+                        "long -1",
+                        "top"
+                    ],
+                    "rets": {
+                        "%2": "-1",
+                        "%3": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1056016",
+                    "target": "napi_create_string_utf8",
+                    "operands": [
+                        "%a1",
+                        "char* \"lastLocation\"",
+                        "long -1",
+                        "top"
+                    ],
+                    "rets": {
+                        "%4": "-1",
+                        "%5": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1056036",
+                    "target": "napi_set_property",
+                    "operands": [
+                        "%a1",
+                        "%1",
+                        "%5",
+                        "%3"
+                    ],
+                    "rets": {
+                        "%6": "-1"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "operand": "top",
+                    "type": "Ret"
+                }
+            ]
+        },
+        {
+            "name": "clean1",
+            "params": {
+                "%a1": "napi_env",
+                "%a2": "napi_callback_info"
+            },
+            "instructions": [
+                {
+                    "callsite": "1056100",
+                    "target": "napi_get_cb_info",
+                    "operands": [
+                        "%a1",
+                        "%a2",
+                        "top",
+                        "top",
+                        "top",
+                        "top"
+                    ],
+                    "rets": {
+                        "%0": "-1",
+                        "%1": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1056128",
+                    "target": "napi_create_string_utf8",
+                    "operands": [
+                        "%a1",
+                        "char* \"Cleaned again!\"",
+                        "long -1",
+                        "top"
+                    ],
+                    "rets": {
+                        "%2": "-1",
+                        "%3": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1056152",
+                    "target": "napi_set_named_property",
+                    "operands": [
+                        "%a1",
+                        "%1",
+                        "char* \"lastLocation\"",
+                        "%3"
+                    ],
+                    "rets": {
+                        "%4": "-1",
+                        "%5": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "operand": "top",
+                    "type": "Ret"
+                }
+            ]
+        },
+        {
+            "name": "cleanString",
+            "params": {
+                "%a1": "napi_env",
+                "%a2": "napi_callback_info"
+            },
+            "instructions": [
+                {
+                    "callsite": "1056236",
+                    "target": "napi_get_cb_info",
+                    "operands": [
+                        "%a1",
+                        "%a2",
+                        "top",
+                        "top",
+                        "top",
+                        "top"
+                    ],
+                    "rets": {
+                        "%0": "-1",
+                        "%1": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1056352",
+                    "target": "napi_create_string_utf8",
+                    "operands": [
+                        "%a1",
+                        "char* \"Cleaned again!\"",
+                        "long -1",
+                        "top"
+                    ],
+                    "rets": {
+                        "%2": "-1",
+                        "%3": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "operand": "%3",
+                    "type": "Ret"
+                }
+            ]
+        }
+    ]
+}

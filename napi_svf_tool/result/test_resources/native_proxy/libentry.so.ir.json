@@ -1,0 +1,110 @@
+{
+    "hap_name": "@TEST_HAP_NAME",
+    "so_name": "@TEST_SO_NAME",
+    "module_name": "entry",
+    "functions": [
+        {
+            "name": "proxy",
+            "params": {
+                "%a1": "napi_env",
+                "%a2": "napi_callback_info"
+            },
+            "instructions": [
+                {
+                    "callsite": "1055796",
+                    "target": "napi_get_cb_info",
+                    "operands": [
+                        "%a1",
+                        "%a2",
+                        "top",
+                        "top",
+                        "top",
+                        "top"
+                    ],
+                    "rets": {
+                        "%0": "-1",
+                        "%1": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "operand": "%1",
+                    "type": "Ret"
+                }
+            ]
+        },
+        {
+            "name": "proxy_copy",
+            "params": {
+                "%a1": "napi_env",
+                "%a2": "napi_callback_info"
+            },
+            "instructions": [
+                {
+                    "callsite": "1055936",
+                    "target": "napi_get_cb_info",
+                    "operands": [
+                        "%a1",
+                        "%a2",
+                        "top",
+                        "top",
+                        "top",
+                        "top"
+                    ],
+                    "rets": {
+                        "%0": "-1",
+                        "%1": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1055948",
+                    "target": "malloc",
+                    "operands": [
+                        "long 256"
+                    ],
+                    "rets": {
+                        "%2": "-1"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1055976",
+                    "target": "napi_get_value_string_utf8",
+                    "operands": [
+                        "%a1",
+                        "%1",
+                        "%2",
+                        "long 256",
+                        "top"
+                    ],
+                    "rets": {
+                        "%3": "-1",
+                        "%4": "2",
+                        "%5": "4"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "callsite": "1056000",
+                    "target": "napi_create_string_utf8",
+                    "operands": [
+                        "%a1",
+                        "%2",
+                        "long 256",
+                        "top"
+                    ],
+                    "rets": {
+                        "%6": "-1",
+                        "%7": "3"
+                    },
+                    "type": "Call"
+                },
+                {
+                    "operand": "%7",
+                    "type": "Ret"
+                }
+            ]
+        }
+    ]
+}

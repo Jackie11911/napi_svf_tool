@@ -1,0 +1,108 @@
+{
+    "function_name": "_ZL3AddP10napi_env__P20napi_callback_info__",
+    "instructions": [
+        {
+            "operands": [
+                "%1",
+                "%2",
+                "%3",
+                "%4",
+                "null",
+                "null"
+            ],
+            "original_taints": [
+                "%1",
+                "%2"
+            ],
+            "rets": [],
+            "target": "napi_get_cb_info",
+            "type": "Call"
+        },
+        {
+            "operands": [
+                "%1",
+                "%5",
+                "%6"
+            ],
+            "original_taints": [
+                "%1"
+            ],
+            "rets": [],
+            "target": "napi_typeof",
+            "type": "Call"
+        },
+        {
+            "operands": [
+                "%1",
+                "%7",
+                "%8"
+            ],
+            "original_taints": [
+                "%1",
+                "%8"
+            ],
+            "rets": [],
+            "target": "napi_typeof",
+            "type": "Call"
+        },
+        {
+            "operands": [
+                "%1",
+                "%9",
+                "%10"
+            ],
+            "original_taints": [
+                "%1",
+                "%10"
+            ],
+            "rets": [],
+            "target": "napi_get_value_double",
+            "type": "Call"
+        },
+        {
+            "operands": [
+                "%1",
+                "%11",
+                "%12"
+            ],
+            "original_taints": [
+                "%1"
+            ],
+            "rets": [],
+            "target": "napi_get_value_double",
+            "type": "Call"
+        },
+        {
+            "operands": [
+                "%1",
+                "%13",
+                "%14"
+            ],
+            "original_taints": [
+                "%1"
+            ],
+            "rets": [],
+            "target": "napi_create_double",
+            "type": "Call"
+        },
+        {
+            "operands": [
+                "%15"
+            ],
+            "original_taints": [],
+            "rets": [],
+            "target": "Ret",
+            "type": "Return"
+        }
+    ],
+    "params": [
+        [
+            "%1",
+            "napi_env"
+        ],
+        [
+            "%2",
+            "napi_callback_info"
+        ]
+    ]
+}
