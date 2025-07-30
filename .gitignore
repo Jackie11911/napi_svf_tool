@@ -1,0 +1,7 @@
+BUILD/
+build/
+.cache/
+CMakeFiles/
+napi_project/
+result/
+napi_analysis.log
