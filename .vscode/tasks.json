@@ -8,7 +8,8 @@
             "args": [
                 "-DCMAKE_CXX_COMPILER=/home/jackie/project/SVF/llvm-16.0.0.obj/bin/clang++",
                 ".",
-                "-DCMAKE_BUILD_TYPE=Debug"
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "-DLLVM_ENABLE_EH=ON"
             ],
             "group": {
                 "kind": "build",
