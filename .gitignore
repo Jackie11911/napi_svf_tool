@@ -5,3 +5,4 @@ CMakeFiles/
 napi_project/
 result/
 napi_analysis.log
+src/napi_svf_tool
