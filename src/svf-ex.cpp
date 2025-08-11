@@ -135,15 +135,15 @@ void traverseOnVFG(const SVFG* vfg, const SVFVar* svfval, PAG* pag)
 
 
 /// 对单个库进行SVF分析并生成JSON输出
-void analyzeSingleLibrary(const LibraryInfo& lib, const std::string& projectName) {
-    
+void analyzeSingleLibrary(const LibraryInfo& lib) {
+
     fs::path resultDir = fs::current_path() / "result";
     if (!fs::exists(resultDir)) {
         fs::create_directory(resultDir);
     }
 
     // 创建项目子目录
-    fs::path projectDir = resultDir / projectName;
+    fs::path projectDir = resultDir / lib.projectName;
     if (!fs::exists(projectDir)) {
         fs::create_directory(projectDir);
     }
@@ -181,16 +181,11 @@ void analyzeSingleLibrary(const LibraryInfo& lib, const std::string& projectName
     SVFGBuilder svfBuilder;
     SVFG* svfg = svfBuilder.buildFullSVFG(ander);
 
-    // 读取并分析 Index.d.ts 文件
-    ReadArkts readArkts;
-    readArkts.parseFile(lib.indexDtsFile);
-    const std::vector<FunctionInfo>& targetfunctions = readArkts.getFunctions();
-
     std::set<llvm::GlobalVariable*> globalVars = NapiPropertiesAnalyzer::analyzeNapiProperties(svfg, pag);
-    std::map<std::string, llvm::Function*> llvmfunctions = NapiPropertiesAnalyzer::analyzeGlobalVars(globalVars, readArkts);
+    std::map<std::string, llvm::Function*> llvmfunctions = NapiPropertiesAnalyzer::analyzeGlobalVars(globalVars);
 
     // 添加对通过napi_set_named_property注册的函数的分析
-    std::map<std::string, llvm::Function*> namedFunctions = NapiPropertiesAnalyzer::analyzeNamedProperties(svfg, pag, ander, readArkts);
+    std::map<std::string, llvm::Function*> namedFunctions = NapiPropertiesAnalyzer::analyzeNamedProperties(svfg, pag, ander);
 
     // 合并两种注册方式的分析结果
     llvmfunctions.insert(namedFunctions.begin(), namedFunctions.end());
@@ -246,15 +241,13 @@ int main(int argc, char ** argv)
     ProjectParser projectParser(argv[1]);
     std::vector<LibraryInfo> libraries = projectParser.getLibraries();
     
-    // 获取项目名称
-    std::string projectName = projectParser.getProjectName();
 
     if (DEBUG_MODE) {
         // 调试模式：串行处理每个库
         SVFUtil::outs() << "使用调试模式：串行处理库\n";
         for (const LibraryInfo& lib : libraries) {
             SVFUtil::outs() << "开始分析库: " << lib.name << "\n";
-            analyzeSingleLibrary(lib, projectName);
+            analyzeSingleLibrary(lib);
         }
     } else {
         // 生产模式：使用多进程
@@ -273,7 +266,7 @@ int main(int argc, char ** argv)
             else if (pid == 0) {
                 // 子进程
                 SVFUtil::outs() << "开始分析库: " << lib.name << " (PID: " << getpid() << ")\n";
-                analyzeSingleLibrary(lib, projectName);
+                analyzeSingleLibrary(lib);
                 exit(0); // 子进程完成后退出
             } 
             else {

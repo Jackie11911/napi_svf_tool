@@ -291,6 +291,9 @@ LIBXML2_XMLLINT_EXECUTABLE:FILEPATH=LIBXML2_XMLLINT_EXECUTABLE-NOTFOUND
 //The directory containing a CMake configuration file for LLVM.
 LLVM_DIR:PATH=/home/jackie/project/SVF/llvm-16.0.0.obj/lib/cmake/llvm
 
+//No help, variable specified on the command line.
+LLVM_ENABLE_EH:UNINITIALIZED=ON
+
 //Arguments to supply to pkg-config
 PKG_CONFIG_ARGN:STRING=
 

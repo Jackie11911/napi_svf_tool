@@ -114,8 +114,7 @@ std::set<GlobalVariable*> NapiPropertiesAnalyzer::analyzeNapiProperties(SVFG* sv
 
 
 // 对globalVars这个数组进行解析
-std::map<std::string, Function*> NapiPropertiesAnalyzer::analyzeGlobalVars(std::set<GlobalVariable*> globalVars, ReadArkts& readArkts) {
-    // 对比readArkts中的函数名，和globalVars中的第一个参数对比
+std::map<std::string, Function*> NapiPropertiesAnalyzer::analyzeGlobalVars(std::set<GlobalVariable*> globalVars) {
     std::map<std::string, Function*> functions;
     for (GlobalVariable* global : globalVars) {
         // 获取全局变量的初始化表达式
@@ -132,7 +131,6 @@ std::map<std::string, Function*> NapiPropertiesAnalyzer::analyzeGlobalVars(std::
                             StringRef propName = strArray->getAsCString();
                             std::string propNameStr = propName.str();
                             SVFUtil::outs() << "Property[" << i << "] name: " << propNameStr << "\n";
-                            // 对比readArkts中的函数名，和globalVars中的第一个参数对比
                             Value* funcField = prop->getOperand(2)->stripPointerCasts();
                             if (Function* callbackFunc = dyn_cast<Function>(funcField)) {
                                 SVFUtil::outs() << "  Callback function: " << callbackFunc->getName().str() << "\n";
@@ -259,7 +257,6 @@ void NapiPropertiesAnalyzer::analyzeSetNamedPropertyCalls(
     SVFIR* pag, 
     PointerAnalysis* pta,
     SVFG* svfg,
-    ReadArkts& readArkts,
     std::map<std::string, Function*>& functions) {
     
     // 查找所有napi_set_named_property调用
@@ -302,9 +299,8 @@ void NapiPropertiesAnalyzer::analyzeSetNamedPropertyCalls(
                             if (isReturnValue) {
                                 SVFUtil::outs() << "  Object is potentially an alias of init function return value\n";
                             }
-                            
-                            // 如果对象是初始化函数的返回值，并且属性名在readArkts中存在
-                            if (isReturnValue && !propNameStr.empty() && readArkts.hasFunction(propNameStr)) {
+
+                            if (isReturnValue && !propNameStr.empty()) {
                                 SVFUtil::outs() << "  Processing property: " << propNameStr << " for export object\n";
                                 
                                 // 查找属性值与napi_create_function结果指针之间的关系
@@ -324,7 +320,7 @@ void NapiPropertiesAnalyzer::analyzeSetNamedPropertyCalls(
 }
 
 // 处理通过napi_set_named_property注册的函数
-std::map<std::string, Function*> NapiPropertiesAnalyzer::analyzeNamedProperties(SVFG* svfg, SVFIR* pag, PointerAnalysis* pta, ReadArkts& readArkts) {
+std::map<std::string, Function*> NapiPropertiesAnalyzer::analyzeNamedProperties(SVFG* svfg, SVFIR* pag, PointerAnalysis* pta) {
     std::map<std::string, Function*> functions;
     
     // 获取LLVM模块
@@ -358,7 +354,7 @@ std::map<std::string, Function*> NapiPropertiesAnalyzer::analyzeNamedProperties(
         }
 
         // 分析napi_set_named_property调用与初始化函数返回值的关系
-        analyzeSetNamedPropertyCalls(llvmModule, initFunc, retNodeId, pag, pta, svfg, readArkts, functions);
+        analyzeSetNamedPropertyCalls(llvmModule, initFunc, retNodeId, pag, pta, svfg, functions);
     }
     
     return functions;

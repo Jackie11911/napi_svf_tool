@@ -11,8 +11,8 @@
 struct LibraryInfo {
     std::string name;              // 库名称
     std::string soName;           // so文件名称
-    std::string indexDtsFile;     // 对应的 Index.d.ts 文件路径
     std::string finalLLVMIR;      // 最终的LLVM IR文件（可能是合并后的）
+    std::string projectName;
 };
 
 class ProjectParser {
@@ -23,17 +23,9 @@ public:
     // 设置CMake路径
     void setCMakePath(const std::string& path);
 
-    // 获取所有的Index.d.ts文件路径
-    std::vector<std::string> getIndexDtsFiles() const;
-
     // 获取所有的LLVM IR文件路径（.bc文件）
     std::vector<std::string> getLLVMIRFiles() const;
 
-    // 获取项目名称（用于生成输出JSON文件名）
-    std::string getProjectName() const;
-
-    // 获取输出JSON文件的路径
-    std::string getOutputJsonPath() const;
 
     // 获取解析到的库信息
     const std::vector<LibraryInfo>& getLibraries() const;
@@ -41,36 +33,38 @@ public:
     // 使用wllvm编译项目并提取bitcode
     bool compileWithWLLVM();
     
-    // 提取所有.so文件的bitcode
-    bool extractBitcode();
 
 private:
     std::filesystem::path projectPath;
-    std::string projectName;
     std::vector<LibraryInfo> libraries;
     std::filesystem::path buildDir;
     std::string cmakePath;  // CMake可执行文件路径
 
     // 从路径中提取项目名称
-    void extractProjectName();
+    std::string extractProjectName(const std::filesystem::path& cmakeDir);
 
     // 递归查找特定类型的文件
     std::vector<std::string> findFiles(const std::string& extension) const;
 
-    // 获取CMake项目目录
-    std::filesystem::path getCMakeProjectDir() const;
+    
+    // 获取所有CMake项目目录
+    std::vector<std::filesystem::path> getCMakeProjectDirs() const;
     
     // 设置wllvm所需的环境变量
     void setupWLLVMEnvironment();
     
-    // 查找所有生成的.so文件
-    std::vector<std::string> findSOFiles() const;
+    
+    // 查找指定目录下的.so文件
+    std::vector<std::string> findSOFilesForDir(const std::filesystem::path& cmakeDir) const;
     
     // 为单个.so文件提取bitcode
-    bool extractBitcodeForFile(const std::string& soFile);
+    bool extractBitcodeForFile(const std::string& soFile, std::string projectName);
     
-    // 查找对应的Index.d.ts文件
-    std::string findIndexDtsFile(const std::string& soName) const;
+    // 对指定目录执行编译
+    bool compileWithWLLVMForDir(const std::filesystem::path& cmakeDir);
+    
+    // 对指定目录提取bitcode
+    bool extractBitcodeForDir(const std::filesystem::path& cmakeDir, std::string projectName);
 };
 
-#endif // PROJECT_PARSER_H 
+#endif // PROJECT_PARSER_H

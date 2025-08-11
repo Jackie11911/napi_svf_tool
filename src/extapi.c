@@ -1433,7 +1433,7 @@ napi_status napi_is_array(napi_env env, napi_value value, bool* result){
     return napi_ok;
 }
 
-napi_status napi_get_array_length(napi_env env, napi_value value, uint32_t* result){
+napi_status _length(napi_env env, napi_value value, uint32_t* result){
     *result = (uint32_t)(uintptr_t)value;
     return napi_ok;
 }

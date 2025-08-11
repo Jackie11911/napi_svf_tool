@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <cstdlib>
+#include <set>
 
 namespace fs = std::filesystem;
 
@@ -12,10 +13,6 @@ ProjectParser::ProjectParser(const std::string& path) : projectPath(path) {
         std::cerr << "项目路径不存在: " << projectPath.string() << std::endl;
         return;
     }
-    extractProjectName();
-    
-    // 设置build目录
-    buildDir = getCMakeProjectDir() / "build";
     
     // 设置默认CMake路径
     const char* harmonyOsPath = std::getenv("HARMONY_OS_PATH");
@@ -26,27 +23,81 @@ ProjectParser::ProjectParser(const std::string& path) : projectPath(path) {
         cmakePath = "cmake";
     }
     
-    // 设置wllvm环境并编译项目
+    // 设置wllvm环境
     setupWLLVMEnvironment();
-    compileWithWLLVM();
-    extractBitcode();
+    
+    // 获取所有CMake项目目录
+    std::vector<fs::path> cmakeDirs = getCMakeProjectDirs();
+    
+    // 对每个CMake项目目录执行编译和提取操作
+    for (const auto& cmakeDir : cmakeDirs) {
+        std::cout << "处理CMake项目: " << cmakeDir.string() << std::endl;
+        
+        // 设置当前处理的build目录
+        buildDir = cmakeDir / "build";
+        
+        // 生成项目名称
+        std::string projectName = extractProjectName(cmakeDir);
+
+        // 编译并提取bitcode
+        if (compileWithWLLVMForDir(cmakeDir)) {
+            extractBitcodeForDir(cmakeDir,projectName);
+        } else {
+            std::cerr << "编译失败: " << cmakeDir.string() << std::endl;
+        }
+    }
 }
 
 void ProjectParser::setCMakePath(const std::string& path) {
     cmakePath = path;
 }
 
-void ProjectParser::extractProjectName() {
-    projectName = projectPath.filename().string();
+std::string ProjectParser::extractProjectName(const fs::path& cmakeDir) {
+    // 获取 projectPath 和 cmakeDir 的相对路径
+    fs::path relativePath = fs::relative(cmakeDir, projectPath);
+
+    // 将路径中的分隔符替换为下划线
+    std::string projectNameWithUnderscores = projectPath.filename().string();
+    for (const auto& part : relativePath) {
+        projectNameWithUnderscores += "_" + part.string();
+    }
+
+    
+    return projectNameWithUnderscores;
 }
 
-fs::path ProjectParser::getCMakeProjectDir() const {
-    fs::path cmakeDir = projectPath / "entry" / "src" / "main" / "cpp";
-    if (!fs::exists(cmakeDir / "CMakeLists.txt")) {
-        std::cerr << "CMakeLists.txt不存在: " << cmakeDir.string() << std::endl;
-        return fs::path();
+
+std::vector<fs::path> ProjectParser::getCMakeProjectDirs() const {
+    std::vector<fs::path> cmakeDirs;
+    std::set<fs::path> visitedParents;
+
+    // 递归遍历项目路径，查找所有包含 CMakeLists.txt 的文件夹
+    for (const auto& entry : fs::recursive_directory_iterator(projectPath)) {
+        if (entry.is_regular_file() && entry.path().filename() == "CMakeLists.txt") {
+            fs::path parentDir = entry.path().parent_path();
+
+            // 检查是否已经记录过该父文件夹或其祖先
+            bool isNewParent = true;
+            for (const auto& visited : visitedParents) {
+                if (parentDir.string().find(visited.string()) == 0) {
+                    isNewParent = false;
+                    break;
+                }
+            }
+
+            if (isNewParent) {
+                cmakeDirs.push_back(parentDir);
+                visitedParents.insert(parentDir);
+                std::cout << "找到CMake项目目录: " << parentDir.string() << std::endl;
+            }
+        }
     }
-    return cmakeDir;
+
+    if (cmakeDirs.empty()) {
+        std::cerr << "警告: 未找到包含CMakeLists.txt的项目文件夹" << std::endl;
+    }
+
+    return cmakeDirs;
 }
 
 void ProjectParser::setupWLLVMEnvironment() {
@@ -71,12 +122,10 @@ void ProjectParser::setupWLLVMEnvironment() {
     setenv("OHOS_ARCH", "armeabi-v7a", 1);
 }
 
-bool ProjectParser::compileWithWLLVM() {
+bool ProjectParser::compileWithWLLVMForDir(const fs::path& cmakeDir) {
     // 获取当前工作目录
     fs::path currentPath = fs::current_path();
     
-    // 切换到CMake项目目录
-    fs::path cmakeDir = getCMakeProjectDir();
     if (cmakeDir.empty()) {
         return false;
     }
@@ -152,10 +201,10 @@ bool ProjectParser::compileWithWLLVM() {
     return true;
 }
 
-std::vector<std::string> ProjectParser::findSOFiles() const {
+std::vector<std::string> ProjectParser::findSOFilesForDir(const fs::path& cmakeDir) const {
     std::vector<std::string> soFiles;
     
-    fs::path buildDir = getCMakeProjectDir() / "build";
+    fs::path buildDir = cmakeDir / "build";
     if (!fs::exists(buildDir)) {
         std::cerr << "错误: build目录不存在: " << buildDir.string() << std::endl;
         return soFiles;
@@ -171,22 +220,19 @@ std::vector<std::string> ProjectParser::findSOFiles() const {
     return soFiles;
 }
 
-bool ProjectParser::extractBitcode() {
+bool ProjectParser::extractBitcodeForDir(const fs::path& cmakeDir, std::string projectName) {
     bool allSuccess = true;
     
-    // 清空之前的库信息
-    libraries.clear();
-    
-    // 获取所有.so文件
-    std::vector<std::string> soFiles = findSOFiles();
+    // 获取指定目录下的所有.so文件
+    std::vector<std::string> soFiles = findSOFilesForDir(cmakeDir);
     if (soFiles.empty()) {
-        std::cerr << "错误: 找不到.so文件" << std::endl;
+        std::cerr << "错误: 在目录 " << cmakeDir.string() << " 中找不到.so文件" << std::endl;
         return false;
     }
     
     // 提取每个.so文件的bitcode
     for (const auto& soFile : soFiles) {
-        if (!extractBitcodeForFile(soFile)) {
+        if (!extractBitcodeForFile(soFile, projectName)) {
             allSuccess = false;
         }
     }
@@ -194,7 +240,7 @@ bool ProjectParser::extractBitcode() {
     return allSuccess;
 }
 
-bool ProjectParser::extractBitcodeForFile(const std::string& soFile) {
+bool ProjectParser::extractBitcodeForFile(const std::string& soFile, std::string projectName) {
     // 保存当前工作目录
     fs::path currentPath = fs::current_path();
     
@@ -252,33 +298,12 @@ bool ProjectParser::extractBitcodeForFile(const std::string& soFile) {
     libInfo.name = libName;
     libInfo.soName = soName;
     libInfo.finalLLVMIR = bcPath.string();
-    
-    // 查找对应的Index.d.ts文件
-    libInfo.indexDtsFile = findIndexDtsFile(soName);
+    libInfo.projectName = projectName; // 设置项目名称
     
     libraries.push_back(libInfo);
     
     std::cout << "成功提取bitcode: " << bcPath.string() << std::endl;
     return true;
-}
-
-std::string ProjectParser::findIndexDtsFile(const std::string& soName) const {
-    std::string libName = soName;
-
-    size_t soPos = libName.find(".so");
-    if (soPos != std::string::npos) {
-        libName = libName.substr(0, soPos); // 去掉".so"后缀
-    }
-    
-    // 构建 Index.d.ts 文件路径
-    fs::path cmakeDir = getCMakeProjectDir();
-    fs::path dtsPath = cmakeDir / "types" / libName / "Index.d.ts";
-    
-    if (fs::exists(dtsPath)) {
-        return fs::absolute(dtsPath).string();
-    }
-    
-    return "";
 }
 
 std::vector<std::string> ProjectParser::findFiles(const std::string& extension) const {
@@ -293,18 +318,6 @@ std::vector<std::string> ProjectParser::findFiles(const std::string& extension) 
     return files;
 }
 
-std::vector<std::string> ProjectParser::getIndexDtsFiles() const {
-    std::vector<std::string> dtsFiles;
-    
-    // 从已解析的库信息中获取 Index.d.ts 文件路径
-    for (const auto& lib : libraries) {
-        if (!lib.indexDtsFile.empty() && fs::exists(lib.indexDtsFile)) {
-            dtsFiles.push_back(lib.indexDtsFile);
-        }
-    }
-    
-    return dtsFiles;
-}
 
 std::vector<std::string> ProjectParser::getLLVMIRFiles() const {
     std::vector<std::string> bcFiles;
@@ -319,21 +332,7 @@ std::vector<std::string> ProjectParser::getLLVMIRFiles() const {
     return bcFiles;
 }
 
-std::string ProjectParser::getProjectName() const {
-    return projectName;
-}
-
-std::string ProjectParser::getOutputJsonPath() const {
-    // 创建result目录（如果不存在）
-    fs::path resultDir = fs::current_path() / "result";
-    if (!fs::exists(resultDir)) {
-        fs::create_directory(resultDir);
-    }
-    
-    // 返回输出JSON文件的路径
-    return (resultDir / (projectName + ".json")).string();
-}
 
 const std::vector<LibraryInfo>& ProjectParser::getLibraries() const {
     return libraries;
-} 
+}
