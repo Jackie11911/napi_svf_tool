@@ -624,9 +624,19 @@ std::vector<const Function *> TaintTracker::getCalledFunctions(const Function *F
     
     for (const Instruction &I : instructions(F))
     {
+        I.print(llvm::outs());
+        SVFUtil::outs() << "\n";
         if (const CallBase *callInst = SVFUtil::dyn_cast<CallBase>(&I))
         {
-            Function *calledFunction = callInst->getCalledFunction();
+            // 直接获取 Function 仅在“无指针转换”的直接调用时非空；
+            // 为适配 bitcast/opaque ptr 等情况，先去除指针转换再判定。
+            const Function *calledFunction = callInst->getCalledFunction();
+            if (!calledFunction) {
+                const Value *calleeV = callInst->getCalledOperand();
+                if (calleeV)
+                    calleeV = calleeV->stripPointerCasts();
+                calledFunction = SVFUtil::dyn_cast<Function>(calleeV);
+            }
             if (calledFunction)
             {
                 calledFunctions.push_back(calledFunction);

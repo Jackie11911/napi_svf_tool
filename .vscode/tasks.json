@@ -19,7 +19,7 @@
         {
             "label": "make",
             "type": "shell",
-            "command": "make",
+            "command": "make -j8",
             "group": {
                 "kind": "build",
                 "isDefault": true

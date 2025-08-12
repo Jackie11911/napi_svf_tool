@@ -6,3 +6,6 @@ napi_project/
 result/
 napi_analysis.log
 src/napi_svf_tool
+CMakeCache.txt
+cmake_install.cmake
+Makefile
