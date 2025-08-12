@@ -39,10 +39,11 @@ public:
     bool isTainted(SVF::NodeID id) const;
     void initializeFunctionArgs(const llvm::Function* func);
     std::vector<TaintUnit> propagateTaint(const llvm::Function* func);
-    void traverseFunction(const llvm::Function* func);
     nlohmann::json Traceker(const llvm::Function* func, std::vector<std::pair<SVF::NodeID, std::string>> paramNodeIDs, std::string funcName);
 
     bool isInstructionTainted(const llvm::Instruction* inst);
+
+    std::vector<const llvm::Function*> getCalledFunctions(const llvm::Function* F, std::set<const llvm::Function*>& visited);
 
     std::vector<TaintUnit> handleTaintedInstruction(const llvm::Instruction* inst);
     TaintUnit handleLoadInstruction(const llvm::Instruction* inst);

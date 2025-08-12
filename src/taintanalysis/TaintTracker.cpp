@@ -612,44 +612,31 @@ std::vector<TaintUnit> TaintTracker::propagateTaint(const llvm::Function* func) 
     return taintresults;
 }
 
-void TaintTracker::traverseFunction(const llvm::Function* func) {
-    NapiPropagationRules napiRules = NapiPropagationRules();
-    SourceAndSinks sourceAndSinks = SourceAndSinks();
-    for (const llvm::BasicBlock& bb : *func) {
-        for (const llvm::Instruction& inst : bb) {
-            // 打印inst
-            inst.print(llvm::outs());
-            SVFUtil::outs() << "\n";
-            if (LLVMUtil::isCallSite(&inst)) {
-                const llvm::CallBase* callInst = LLVMUtil::getLLVMCallSite(&inst);
-                const llvm::Function* calledFunction = LLVMUtil::getCallee(callInst);
 
-                if (calledFunction) {
-                    if (napiRules.is_napi_function(calledFunction->getName().str()) || sourceAndSinks.is_sink_methods(calledFunction->getName().str())) {
-                        // 打印被调用函数名
-                        SVFUtil::outs() << "Called function: " << calledFunction->getName().str() << "\n";
-                        targetedfunctions.push_back(calledFunction);
-                        targetedinst.push_back(&inst);
-                    }
-                    // 递归调用被调用的函数
-                    traverseFunction(calledFunction);
-                }
-            }
-            // 处理invoke指令
-            else if (llvm::isa<llvm::InvokeInst>(&inst)) {
-                const llvm::InvokeInst* invokeInst = llvm::dyn_cast<llvm::InvokeInst>(&inst);
-                const llvm::Function* calledFunction = invokeInst->getCalledFunction();
-                if (calledFunction && !calledFunction->isDeclaration()) {
-                    if (napiRules.is_napi_function(calledFunction->getName().str()) || sourceAndSinks.is_sink_methods(calledFunction->getName().str())) {
-                        targetedfunctions.push_back(calledFunction);
-                        targetedinst.push_back(&inst);
-                    }
-                    // 递归调用被调用的函数
-                    traverseFunction(calledFunction);
-                }
+std::vector<const Function *> TaintTracker::getCalledFunctions(const Function *F, std::set<const Function*>& visited)
+{
+    std::vector<const Function *> calledFunctions;
+    if (visited.count(F)) {
+        return calledFunctions; // 已处理过，避免循环
+    }
+    visited.insert(F);
+
+    
+    for (const Instruction &I : instructions(F))
+    {
+        if (const CallBase *callInst = SVFUtil::dyn_cast<CallBase>(&I))
+        {
+            Function *calledFunction = callInst->getCalledFunction();
+            if (calledFunction)
+            {
+                calledFunctions.push_back(calledFunction);
+                targetedinst.push_back(&I);
+                std::vector<const Function *> nestedCalledFunctions = getCalledFunctions(calledFunction, visited);
+                calledFunctions.insert(calledFunctions.end(), nestedCalledFunctions.begin(), nestedCalledFunctions.end());
             }
         }
     }
+    return calledFunctions;
 }
 
 
@@ -659,7 +646,8 @@ nlohmann::json TaintTracker::Traceker(const llvm::Function* func, std::vector<st
     // 初始化，清空
     targetedfunctions.clear();
     targetedinst.clear();
-    traverseFunction(func);
+    std::set<const Function*> visitedFunctions;
+    targetedfunctions = TaintTracker::getCalledFunctions(func,visitedFunctions);
     // 打印targetedfunctions
     TaintMap taintMap(paramNodeIDs);
     std::vector<SummaryItem> summaryItems;

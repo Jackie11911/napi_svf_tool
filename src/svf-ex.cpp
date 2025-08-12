@@ -25,7 +25,7 @@ using namespace SVF;
 
 namespace fs = std::filesystem;
 
-static bool DEBUG_MODE = false;
+static bool DEBUG_MODE = true;
 
 /*!
  * An example to query alias results of two LLVM values
