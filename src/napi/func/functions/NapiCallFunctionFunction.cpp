@@ -21,6 +21,7 @@ using namespace SVF;
 void handleNapiCallFunction(const llvm::Instruction* inst, TaintMap& taintMap, const SVFG* svfg, const SVFIR* pag, SVF::Andersen* ander, std::vector<SummaryItem>& summaryItems) {
     const llvm::CallInst* callInst = llvm::dyn_cast<llvm::CallInst>(inst);
     if (!callInst) return;
+    inst->print(llvm::outs());
 
     std::string calledFunctionName = "";
 
@@ -36,9 +37,10 @@ void handleNapiCallFunction(const llvm::Instruction* inst, TaintMap& taintMap, c
         calledFunctionName = calledFunction->getName().str();
     }
     SummaryItem summaryItemResult(calledFunctionName, "Call");
+    callInst->print(llvm::outs());
 
-    
-    const llvm::Value* envParam = callInst->getOperand(0);
+    const llvm::Value* envParam = callInst->getArgOperand(0);
+    envParam->print(llvm::outs());
     NodeID envParamNodeID = LLVMModuleSet::getLLVMModuleSet()->getValueNode(envParam);
     int envID = taintMap.getParamIdByIndex(0); 
     if (envID == -1) {
@@ -58,7 +60,7 @@ void handleNapiCallFunction(const llvm::Instruction* inst, TaintMap& taintMap, c
     }
 
     for(int i = 1; i < 4; i++) {
-        const llvm::Value* param = callInst->getOperand(i);
+        const llvm::Value* param = callInst->getArgOperand(i);
         if(llvm::isa<llvm::Constant>(param)){
             std::string paramConstant = parseConstant(param);
             if(paramConstant == ""){
@@ -87,7 +89,7 @@ void handleNapiCallFunction(const llvm::Instruction* inst, TaintMap& taintMap, c
     // 处理第五个参数
     summaryItemResult.addOperand("top");
     if(isInt){
-        const llvm::Value* argvParam = callInst->getOperand(4);
+        const llvm::Value* argvParam = callInst->getArgOperand(4);
         NodeID argvParamNodeID = LLVMModuleSet::getLLVMModuleSet()->getValueNode(argvParam);
         const SVFVar* argvParamSVFVar = pag->getGNode(argvParamNodeID);
         // 如果argv不是null
@@ -98,7 +100,7 @@ void handleNapiCallFunction(const llvm::Instruction* inst, TaintMap& taintMap, c
         }  
     }
     // 获取第六个参数
-    const llvm::Value* resultParam = callInst->getOperand(5);
+    const llvm::Value* resultParam = callInst->getArgOperand(5);
     NodeID resultParamNodeID = LLVMModuleSet::getLLVMModuleSet()->getValueNode(resultParam);
     int resultID = taintMap.assignNewId(resultParamNodeID);
     summaryItemResult.addOperand("top");

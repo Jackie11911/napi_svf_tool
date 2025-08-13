@@ -4,7 +4,8 @@ using namespace SVF;
 
 TaintMap::TaintMap() : counter(0) {}
 
-TaintMap::TaintMap(std::vector<std::pair<NodeID, std::string>> paramNodeIDs) : counter(0) {
+TaintMap::TaintMap(std::vector<std::pair<NodeID, std::string>> paramNodeIDs, SVF::PointerAnalysis* pta) : counter(0), pta(pta) {
+    this->pta = pta; // 初始化PointerAnalysis指针
     for (size_t i = 0; i < paramNodeIDs.size(); ++i) {
         const auto& node = paramNodeIDs[i];
         int paramId = assignNewId(node.first);
@@ -25,13 +26,13 @@ TaintMap::TaintMap(std::vector<std::pair<NodeID, std::string>> paramNodeIDs) : c
 
 int TaintMap::assignNewId(NodeID node) {
     if (nodeToNewIds.find(node) != nodeToNewIds.end()) {
-        if(nodeToNewIds[node].size()  >= 1) {
+        if(nodeToNewIds[node].size() >= 1) {
             return nodeToNewIds[node][0];
-        }
-        else {
+        } else {
             return -1;
         }
     }
+
     int newId = counter++;
     if (nodeToNewIds.find(node) == nodeToNewIds.end()) {
         nodeToNewIds[node] = std::vector<int>();
@@ -41,6 +42,22 @@ int TaintMap::assignNewId(NodeID node) {
         newIdToNode[newId] = std::vector<SVF::NodeID>();
     }
     newIdToNode[newId].push_back(node);
+
+    // Handle points-to set
+    const PointsTo& pts = this->pta->getPts(node);
+    for (PointsTo::iterator it = pts.begin(); it != pts.end(); ++it) {
+        NodeID objId = *it;
+        if (nodeToNewIds.find(objId) == nodeToNewIds.end()) {
+            int objNewId = newId;
+            nodeToNewIds[objId] = std::vector<int>();
+            nodeToNewIds[objId].push_back(objNewId);
+            if (newIdToNode.find(objNewId) == newIdToNode.end()) {
+                newIdToNode[objNewId] = std::vector<SVF::NodeID>();
+            }
+            newIdToNode[objNewId].push_back(objId);
+        }
+    }
+
     return newId;
 }
 
@@ -173,5 +190,5 @@ int TaintMap::getParamIdIfAlias(SVF::NodeID nodeID, SVF::Andersen* ander) const 
         }
     }
     return -1; // 没有找到别名关系
-} 
+}
 

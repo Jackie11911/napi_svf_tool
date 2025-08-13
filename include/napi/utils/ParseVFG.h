@@ -15,12 +15,11 @@ using namespace SVF;
 
 std::pair<NodeID, int> parseLoadVFG(SVFVar* loadSVFVar, const SVFG* svfg, const SVFIR* pag);
 std::vector<NodeID> bfsPredecessors(const SVFG* svfg, const SVFVar* startSVFVar, const SVFIR* pag);
-std::vector<NodeID> bfsPredecessorsWithImplicitFlow(const SVFG* svfg,const SVFVar* startSVFVar, const SVFIR* pag);
 std::vector<NodeID> getTaintmapExistingNodes(std::vector<NodeID>& nodes, TaintMap& taintMap, SVF::Andersen* ander);
 void parseArgsOperand(const SVFG* svfg, const SVFIR* pag, NodeID valueParamNodeID, const SVFVar* valueSVFVar, TaintMap& taintMap, std::vector<SummaryItem>& summaryItems, SummaryItem& summaryItemResult, int argc, SVF::Andersen* ander);
 void handleTaintFlow(const SVFG* svfg, const SVFIR* pag, const llvm::Value* valueParam, TaintMap& taintMap, std::vector<SummaryItem>& summaryItems, SummaryItem& summaryItemResult, SVF::Andersen* ander);
 int handlePhi(const SVFG* svfg, const SVFIR* pag, const llvm::Value* valueParam, TaintMap& taintMap, std::vector<SummaryItem>& summaryItems, SVF::Andersen* ander);
 std::string parseConstant(const llvm::Value* value);
-int parseIntValue(const SVFVar* valueSVFVar, const SVFG* svfg, const SVFIR* pag);
+int parseIntValue(const SVFVar* valueSVFVar, const SVFG* svfg, const SVFIR* pag, NodeID intNodeId, PointerAnalysis* ander);
 
 #endif

@@ -24,11 +24,12 @@ private:
     std::unordered_map<int, std::vector<int>> valueFlowMap;
     std::unordered_map<int, std::vector<SVF::NodeID>> newIdToNode;
     std::vector<ParamInfo> paramIds;
+    SVF::PointerAnalysis* pta;
 
 public:
     TaintMap();
 
-    explicit TaintMap(std::vector<std::pair<SVF::NodeID, std::string>> paramNodeIDs);
+    explicit TaintMap(std::vector<std::pair<SVF::NodeID, std::string>> paramNodeIDs, SVF::PointerAnalysis* pta);
     
     // 为单个NodeID分配新编号
     int assignNewId(SVF::NodeID node);

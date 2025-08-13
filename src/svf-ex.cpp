@@ -17,6 +17,7 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <cstdlib> // for getenv
 using namespace llvm;
 using namespace std;
 using namespace SVF;
@@ -154,6 +155,11 @@ void analyzeSingleLibrary(const LibraryInfo& lib) {
     // 设置模块向量，使用所有的LLVM IR文件
     std::vector<std::string> moduleNameVec;
     moduleNameVec.push_back(lib.finalLLVMIR);
+    // if (const char* svfDir = std::getenv("SVF_DIR")) {
+    //     moduleNameVec.push_back(std::string(svfDir) + "/lib/extapi.bc");
+    // } else {
+    //     SVFUtil::errs() << "环境变量 SVF_DIR 未设置，无法添加 extapi.bc\n";
+    // }
 
     if (Options::WriteAnder() == "ir_annotator") {
         LLVMModuleSet::preProcessBCs(moduleNameVec);

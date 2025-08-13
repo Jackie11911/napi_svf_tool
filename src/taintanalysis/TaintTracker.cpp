@@ -628,8 +628,6 @@ std::vector<const Function *> TaintTracker::getCalledFunctions(const Function *F
         SVFUtil::outs() << "\n";
         if (const CallBase *callInst = SVFUtil::dyn_cast<CallBase>(&I))
         {
-            // 直接获取 Function 仅在“无指针转换”的直接调用时非空；
-            // 为适配 bitcast/opaque ptr 等情况，先去除指针转换再判定。
             const Function *calledFunction = callInst->getCalledFunction();
             if (!calledFunction) {
                 const Value *calleeV = callInst->getCalledOperand();
@@ -659,7 +657,7 @@ nlohmann::json TaintTracker::Traceker(const llvm::Function* func, std::vector<st
     std::set<const Function*> visitedFunctions;
     targetedfunctions = TaintTracker::getCalledFunctions(func,visitedFunctions);
     // 打印targetedfunctions
-    TaintMap taintMap(paramNodeIDs);
+    TaintMap taintMap(paramNodeIDs, ander);
     std::vector<SummaryItem> summaryItems;
     
     SVFUtil::outs() << "Targeted functions:\n";
@@ -684,18 +682,33 @@ nlohmann::json TaintTracker::Traceker(const llvm::Function* func, std::vector<st
     for (const auto& inst : targetedinst) {
         inst->print(llvm::outs());
         SVFUtil::outs() << "\n";
-        for (unsigned i = 0; i < inst->getNumOperands(); ++i) {
-            Value *operand = inst->getOperand(i);
-            NodeID nodeId = LLVMModuleSet::getLLVMModuleSet()->getValueNode(operand); // 使用SVFIRBuilder调用getValueNode
-            if (targetidsets.count(nodeId) == 0) {
-                targetidsets.insert(nodeId);
+        if (const CallBase* cb = SVFUtil::dyn_cast<CallBase>(inst)) {
+            for (unsigned i = 0; i < cb->arg_size(); ++i) {
+                const Value *operand = cb->getArgOperand(i);
+                NodeID nodeId = LLVMModuleSet::getLLVMModuleSet()->getValueNode(operand);
+                if (targetidsets.count(nodeId) == 0) {
+                    targetidsets.insert(nodeId);
+                }
+                std::cout << "Arg " << i << ": " << operand->getName().str() << ", NodeID: " << nodeId << std::endl;
+                SVFVar* svfVar = pag->getGNode(nodeId);
+                if (svfVar) {
+                    std::cout << "SVFVar Value: " << svfVar->toString() << std::endl;
+                    std::cout << "LLVM Name: " << svfVar->getValueName() << std::endl;
+                }
             }
-            std::cout << "Operand " << i << ": " << operand->getName().str() << ", NodeID: " << nodeId << std::endl;
-            // 打印nodeid对应的svfvar的值和在llvm中的名称
-            SVFVar* svfVar = pag->getGNode(nodeId);
-            if (svfVar) { 
-                std::cout << "SVFVar Value: " << svfVar->toString() << std::endl;
-                std::cout << "LLVM Name: " << svfVar->getValueName() << std::endl;
+        } else {
+            for (unsigned i = 0; i < inst->getNumOperands(); ++i) {
+                const Value *operand = inst->getOperand(i);
+                NodeID nodeId = LLVMModuleSet::getLLVMModuleSet()->getValueNode(operand);
+                if (targetidsets.count(nodeId) == 0) {
+                    targetidsets.insert(nodeId);
+                }
+                std::cout << "Operand " << i << ": " << operand->getName().str() << ", NodeID: " << nodeId << std::endl;
+                SVFVar* svfVar = pag->getGNode(nodeId);
+                if (svfVar) {
+                    std::cout << "SVFVar Value: " << svfVar->toString() << std::endl;
+                    std::cout << "LLVM Name: " << svfVar->getValueName() << std::endl;
+                }
             }
         }
         SVFUtil::outs() << "\n";

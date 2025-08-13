@@ -140,42 +140,6 @@ std::vector<NodeID> getTaintmapExistingNodes(std::vector<NodeID>& nodeIDs, Taint
     return results;
 }
 
-std::vector<NodeID> bfsPredecessorsWithImplicitFlow(const SVFG* svfg,const SVFVar* startSVFVar, const SVFIR* pag) {
-    std::vector<NodeID> results;
-    std::set<const VFGNode*> visited;
-    if(!svfg->hasDefSVFGNode(startSVFVar)){
-        return results;
-    }
-    const VFGNode* startNode = svfg->getDefSVFGNode(startSVFVar);
-    if(!startNode){
-        return results;
-    }
-    std::queue<const VFGNode*> queue;
-    queue.push(startNode);
-    while(!queue.empty()){
-        const VFGNode* current = queue.front();
-        queue.pop();
-        if(visited.find(current) != visited.end()){
-            continue;
-        }
-        visited.insert(current);
-        for (VFGNode::const_iterator it = current->InEdgeBegin(), eit = current->InEdgeEnd(); it != eit; ++it)
-        {
-            VFGEdge* edge = *it;
-            VFGNode* PreNode = edge->getSrcNode();
-            if (visited.find(PreNode) == visited.end())
-            {
-                queue.push(PreNode);
-            }
-            NodeID preNodeID = PreNode->getId();
-            std::cout << "preNodeID: " << preNodeID << std::endl;
-            results.push_back(preNodeID);
-        }
-    }
-    return results;
-}
-
-
 
 int getTaintmapNewID(NodeID nodeID, TaintMap& taintMap, const SVFG* svfg, const SVFIR* pag, NodeID preNodeID) {
     SVFVar* valueSVFVar = pag->getGNode(nodeID);
@@ -194,34 +158,51 @@ int getTaintmapNewID(NodeID nodeID, TaintMap& taintMap, const SVFG* svfg, const 
     return -1;
 }
 
-int parseIntValue(const SVFVar* intSVFVar, const SVFG* svfg, const SVFIR* pag) {
-    if (!svfg->hasDefSVFGNode(intSVFVar)){
-        return -1;
-    }
-    
-    const VFGNode* intVNode = svfg->getDefSVFGNode(intSVFVar);
-    if (!intVNode) {
-        return -1;
-    }
-    // 遍历 intSVFVar 的出边
-    for (auto it = intVNode->OutEdgeBegin(); it != intVNode->OutEdgeEnd(); ++it) {
-        SVFGEdge* edge = *it;
-        const VFGNode* dstNode = edge->getDstNode();
+int parseIntValue(const SVFVar* intSVFVar, const SVFG* svfg, const SVFIR* pag, NodeID intNodeId, PointerAnalysis* ander) {
+    const PointsTo& pts = ander->getPts(intNodeId);
+    if (!pts.empty()) {
+        for (PointsTo::iterator it = pts.begin(); it != pts.end(); ++it) {
+            NodeID objId = *it; 
+            const SVFVar* objVar = pag->getGNode(objId);
+            if (!objVar) {
+                continue;
+            }
 
-        // 检查源节点是否为 StoreVFGNode
-        if (const StoreVFGNode* storeNode = SVFUtil::dyn_cast<StoreVFGNode>(dstNode)) {
-            // 获取存储的值
-            const SVFVar* storedValue = storeNode->getPAGSrcNode();
-            if (const ConstIntValVar* constIntVar = SVFUtil::dyn_cast<ConstIntValVar>(storedValue)) {
-                // 获取常量整数值（有符号扩展值）
-                s64_t intValue = constIntVar->getSExtValue();
-                std::cout << "The value of int is: " << intValue << std::endl;
-                return intValue;
+            NodeID addrVarId = -1;
+            for (auto nit = svfg->begin(), nie = svfg->end(); nit != nie; ++nit) {
+                const SVFGNode* node = nit->second;
+                const AddrVFGNode* addrNode = SVFUtil::dyn_cast<AddrVFGNode>(node);
+                if (!addrNode) continue;
+                if (const StmtVFGNode* stmt = SVFUtil::dyn_cast<StmtVFGNode>(addrNode)) {
+                    NodeID srcId = stmt->getPAGSrcNodeID();
+                    NodeID dstId = stmt->getPAGDstNodeID();
+                    if (srcId == objId) {
+                        addrVarId = dstId; // VarX
+                        break;
+                    }
+                }
+            }
+
+            if (addrVarId != -1) {
+                for (auto nit = svfg->begin(), nie = svfg->end(); nit != nie; ++nit) {
+                    const SVFGNode* node = nit->second;
+                    if (const StoreVFGNode* storeNode = SVFUtil::dyn_cast<StoreVFGNode>(node)) {
+                        NodeID dstId = storeNode->getPAGDstNodeID();
+                        if (dstId == addrVarId || ander->alias(dstId, addrVarId) != SVF::AliasResult::NoAlias) {
+                            const SVFVar* storedValue = storeNode->getPAGSrcNode();
+                            if (const ConstIntValVar* constIntVar = SVFUtil::dyn_cast<ConstIntValVar>(storedValue)) {
+                                s64_t intValue = constIntVar->getSExtValue();
+                                std::cout << "The value of argc is: " << intValue << std::endl;
+                                return static_cast<int>(intValue);
+                            }
+                        }
+                    }
+                }
             }
         }
+    } else {
+        std::cerr << "Warning: No points-to information found for argc." << std::endl;
     }
-
-    std::cout << "Failed to find the value of argc." << std::endl;
 
     return -1;
 }
@@ -307,13 +288,21 @@ void handleTaintFlow(const SVFG* svfg, const SVFIR* pag, const llvm::Value* valu
         summaryItemResult.addOperand("null");
         return;
     }
-    std::vector<NodeID> preNodeIDs = bfsPredecessors(svfg, valueSVFVar, pag);
+    const PointsTo& pts = ander->getPts(valueParamNodeID);
+    std::vector<NodeID> preNodeIDs;
+    for (PointsTo::iterator it = pts.begin(); it != pts.end(); ++it) {
+        NodeID objId = *it;  // 指向的对象节点ID
+        preNodeIDs.push_back(objId);
+        std::cout << "Points to: " << objId << std::endl;
+    }
+    std::vector<NodeID> predecessors = bfsPredecessors(svfg, valueSVFVar, pag);
+    preNodeIDs.insert(preNodeIDs.end(), predecessors.begin(), predecessors.end());
     std::vector<NodeID> existingNodeIDs = getTaintmapExistingNodes(preNodeIDs, taintMap, ander);
     if(existingNodeIDs.size() == 0) {
         bool hasInt = false;
         for(auto preNodeID : preNodeIDs){
             const SVFVar* preSVFVar = pag->getGNode(preNodeID);
-            int intValue = parseIntValue(preSVFVar, svfg, pag);
+            int intValue = parseIntValue(preSVFVar, svfg, pag, preNodeID, ander);
             if(intValue != -1){
                 summaryItemResult.addOperand("long "+std::to_string(intValue));
                 hasInt = true;

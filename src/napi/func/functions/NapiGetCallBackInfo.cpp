@@ -17,34 +17,51 @@ using namespace SVF;
 //                      napi_value* thisArg,
 //                      void** data)
 
-int parseArgcValue(SVFVar* argcSVFVar, const SVFG* svfg, const SVFIR* pag) {
-    if (!svfg->hasDefSVFGNode(argcSVFVar)){
-        return -1;
-    }
-    
-    const VFGNode* argcVNode = svfg->getDefSVFGNode(argcSVFVar);
-    if (!argcVNode) {
-        return -1;
-    }
-    // 遍历 argcNode 的出边
-    for (auto it = argcVNode->OutEdgeBegin(); it != argcVNode->OutEdgeEnd(); ++it) {
-        SVFGEdge* edge = *it;
-        const VFGNode* dstNode = edge->getDstNode();
+int parseArgcValue(SVFVar* argcSVFVar, const SVFG* svfg, const SVFIR* pag, NodeID argcNodeID, PointerAnalysis* ander) {
+    const PointsTo& pts = ander->getPts(argcNodeID);
+    if (!pts.empty()) {
+        for (PointsTo::iterator it = pts.begin(); it != pts.end(); ++it) {
+            NodeID objId = *it; 
+            const SVFVar* objVar = pag->getGNode(objId);
+            if (!objVar) {
+                continue;
+            }
 
-        // 检查源节点是否为 StoreVFGNode
-        if (const StoreVFGNode* storeNode = SVFUtil::dyn_cast<StoreVFGNode>(dstNode)) {
-            // 获取存储的值
-            const SVFVar* storedValue = storeNode->getPAGSrcNode();
-            if (const ConstIntValVar* constIntVar = SVFUtil::dyn_cast<ConstIntValVar>(storedValue)) {
-                // 获取常量整数值（有符号扩展值）
-                s64_t intValue = constIntVar->getSExtValue();
-                std::cout << "The value of argc is: " << intValue << std::endl;
-                return intValue;
+            NodeID addrVarId = -1;
+            for (auto nit = svfg->begin(), nie = svfg->end(); nit != nie; ++nit) {
+                const SVFGNode* node = nit->second;
+                const AddrVFGNode* addrNode = SVFUtil::dyn_cast<AddrVFGNode>(node);
+                if (!addrNode) continue;
+                if (const StmtVFGNode* stmt = SVFUtil::dyn_cast<StmtVFGNode>(addrNode)) {
+                    NodeID srcId = stmt->getPAGSrcNodeID();
+                    NodeID dstId = stmt->getPAGDstNodeID();
+                    if (srcId == objId) {
+                        addrVarId = dstId; // VarX
+                        break;
+                    }
+                }
+            }
+
+            if (addrVarId != -1) {
+                for (auto nit = svfg->begin(), nie = svfg->end(); nit != nie; ++nit) {
+                    const SVFGNode* node = nit->second;
+                    if (const StoreVFGNode* storeNode = SVFUtil::dyn_cast<StoreVFGNode>(node)) {
+                        NodeID dstId = storeNode->getPAGDstNodeID();
+                        if (dstId == addrVarId || ander->alias(dstId, addrVarId) != SVF::AliasResult::NoAlias) {
+                            const SVFVar* storedValue = storeNode->getPAGSrcNode();
+                            if (const ConstIntValVar* constIntVar = SVFUtil::dyn_cast<ConstIntValVar>(storedValue)) {
+                                s64_t intValue = constIntVar->getSExtValue();
+                                std::cout << "The value of argc is: " << intValue << std::endl;
+                                return static_cast<int>(intValue);
+                            }
+                        }
+                    }
+                }
             }
         }
+    } else {
+        std::cerr << "Warning: No points-to information found for argc." << std::endl;
     }
-
-    std::cout << "Failed to find the value of argc." << std::endl;
 
     return -1;
 }
@@ -86,7 +103,7 @@ void handleNapiGetCbInfo(const llvm::Instruction* inst, TaintMap& taintMap, cons
     SummaryItem summaryItemResult(calledFunctionName, "Call");
 
     // 获取第一个参数
-    const llvm::Value* envParam = callInst->getOperand(0);
+    const llvm::Value* envParam = callInst->getArgOperand(0);
     NodeID envParamNodeID = LLVMModuleSet::getLLVMModuleSet()->getValueNode(envParam);
     int envID = taintMap.getParamIdByIndex(0); // 直接使用第一个参数的paramId
     if (envID == -1) {
@@ -95,7 +112,7 @@ void handleNapiGetCbInfo(const llvm::Instruction* inst, TaintMap& taintMap, cons
     summaryItemResult.addOperand("%"+std::to_string(envID));
 
     // 获取第二个参数
-    const llvm::Value* cbInfoParam = callInst->getOperand(1);
+    const llvm::Value* cbInfoParam = callInst->getArgOperand(1);
     NodeID cbInfoParamNodeID = LLVMModuleSet::getLLVMModuleSet()->getValueNode(cbInfoParam);
     int cbInfoID = taintMap.getParamIdByIndex(1); // 直接使用第二个参数的paramId
     if (cbInfoID == -1) {
@@ -104,12 +121,12 @@ void handleNapiGetCbInfo(const llvm::Instruction* inst, TaintMap& taintMap, cons
     summaryItemResult.addOperand("%"+std::to_string(cbInfoID));
 
     // 获取第三个参数 argc，并解析其参数值
-    const llvm::Value* argc = callInst->getOperand(2);
+    const llvm::Value* argc = callInst->getArgOperand(2);
     NodeID argcNodeID = LLVMModuleSet::getLLVMModuleSet()->getValueNode(argc);
     int argcValue = -1;
     if(argcNodeID != 0){
         SVFVar* argcSVFVar = pag->getGNode(argcNodeID);
-        argcValue = parseArgcValue(argcSVFVar, svfg, pag);
+        argcValue = parseArgcValue(argcSVFVar, svfg, pag, argcNodeID, ander);
         if(argcValue == -1){
             summaryItemResult.addOperand("top");
         }
@@ -132,7 +149,7 @@ void handleNapiGetCbInfo(const llvm::Instruction* inst, TaintMap& taintMap, cons
     }
 
     // 获取第四个参数argv，解析其数组内容
-    const llvm::Value* argv = callInst->getOperand(3);
+    const llvm::Value* argv = callInst->getArgOperand(3);
     // 获取argv的SVF表示
     NodeID argvNodeID = LLVMModuleSet::getLLVMModuleSet()->getValueNode(argv);
     if(argvNodeID != 0){
@@ -148,7 +165,7 @@ void handleNapiGetCbInfo(const llvm::Instruction* inst, TaintMap& taintMap, cons
     }
 
     // 第五个参数（如果第五个参数为null，则不处理）
-    const llvm::Value* thisArg = callInst->getOperand(4);
+    const llvm::Value* thisArg = callInst->getArgOperand(4);
     if (thisArg){
         NodeID thisArgNodeID = LLVMModuleSet::getLLVMModuleSet()->getValueNode(thisArg);
         if(thisArgNodeID != 0){
@@ -159,7 +176,7 @@ void handleNapiGetCbInfo(const llvm::Instruction* inst, TaintMap& taintMap, cons
     }
 
     // 第六个参数
-    const llvm::Value* data = callInst->getOperand(5);
+    const llvm::Value* data = callInst->getArgOperand(5);
     if (data){
         NodeID dataNodeID = LLVMModuleSet::getLLVMModuleSet()->getValueNode(data);
         if(dataNodeID != 0){
