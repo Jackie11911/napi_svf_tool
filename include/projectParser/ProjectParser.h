@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <map>
 #include <nlohmann/json.hpp>
+#include <fstream>
 
 // 定义一个结构体来存储so库的信息
 struct LibraryInfo {
@@ -39,6 +40,10 @@ private:
     std::vector<LibraryInfo> libraries;
     std::filesystem::path buildDir;
     std::string cmakePath;  // CMake可执行文件路径
+    // 日志目录与当前项目日志文件
+    std::filesystem::path logDir;
+    std::filesystem::path currentLogFile;
+    mutable std::ofstream logStream; // 允许在const方法中写日志
 
     // 从路径中提取项目名称
     std::string extractProjectName(const std::filesystem::path& cmakeDir);
@@ -65,6 +70,15 @@ private:
     
     // 对指定目录提取bitcode
     bool extractBitcodeForDir(const std::filesystem::path& cmakeDir, std::string projectName);
+
+    // 日志工具
+    std::string makeLogFileNameFromPath(const std::filesystem::path& p) const; // 将路径中的分隔符替换为"_"
+    void openProjectLog(const std::filesystem::path& cmakeDir); // 为单个项目打开日志
+    void closeProjectLog();
+    void logInfo(const std::string& msg) const;
+    void logError(const std::string& msg) const;
+    // 在命令后追加输出重定向到当前日志文件
+    std::string withLogRedirect(const std::string& cmd) const;
 };
 
 #endif // PROJECT_PARSER_H

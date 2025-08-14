@@ -4,13 +4,21 @@
 #include <iostream>
 #include <cstdlib>
 #include <set>
+#include <system_error>
 
 namespace fs = std::filesystem;
 
 ProjectParser::ProjectParser(const std::string& path) : projectPath(path) {
+    // 初始化日志目录
+    logDir = fs::current_path() / "build_log";
+    {
+        std::error_code ec;
+        fs::create_directories(logDir, ec);
+    }
+
     // 检查路径是否存在
     if (!fs::exists(projectPath)) {
-        std::cerr << "项目路径不存在: " << projectPath.string() << std::endl;
+        logError(std::string("项目路径不存在: ") + projectPath.string());
         return;
     }
     
@@ -31,7 +39,9 @@ ProjectParser::ProjectParser(const std::string& path) : projectPath(path) {
     
     // 对每个CMake项目目录执行编译和提取操作
     for (const auto& cmakeDir : cmakeDirs) {
-        std::cout << "处理CMake项目: " << cmakeDir.string() << std::endl;
+        // 为该项目打开独立日志
+        openProjectLog(cmakeDir);
+        logInfo(std::string("处理CMake项目: ") + cmakeDir.string());
         
         // 设置当前处理的build目录
         buildDir = cmakeDir / "build";
@@ -43,8 +53,10 @@ ProjectParser::ProjectParser(const std::string& path) : projectPath(path) {
         if (compileWithWLLVMForDir(cmakeDir)) {
             extractBitcodeForDir(cmakeDir,projectName);
         } else {
-            std::cerr << "编译失败: " << cmakeDir.string() << std::endl;
+            logError(std::string("编译失败: ") + cmakeDir.string());
         }
+
+        closeProjectLog();
     }
 }
 
@@ -88,13 +100,13 @@ std::vector<fs::path> ProjectParser::getCMakeProjectDirs() const {
             if (isNewParent) {
                 cmakeDirs.push_back(parentDir);
                 visitedParents.insert(parentDir);
-                std::cout << "找到CMake项目目录: " << parentDir.string() << std::endl;
+                // 发现项目目录的日志将在具体处理时记录
             }
         }
     }
 
     if (cmakeDirs.empty()) {
-        std::cerr << "警告: 未找到包含CMakeLists.txt的项目文件夹" << std::endl;
+        logError("警告: 未找到包含CMakeLists.txt的项目文件夹");
     }
 
     return cmakeDirs;
@@ -102,11 +114,13 @@ std::vector<fs::path> ProjectParser::getCMakeProjectDirs() const {
 
 void ProjectParser::setupWLLVMEnvironment() {
     // 设置wllvm所需的环境变量
+    // 记录一下激活虚拟环境的尝试
+    logInfo("尝试激活Python虚拟环境: source ~/venv/bin/activate");
     std::system("source ~/venv/bin/activate");
     
     const char* harmonyOsPath = std::getenv("HARMONY_OS_PATH");
     if (harmonyOsPath == nullptr) {
-        std::cerr << "错误: 未设置HARMONY_OS_PATH环境变量" << std::endl;
+        logError("错误: 未设置HARMONY_OS_PATH环境变量");
         return;
     }
     
@@ -133,19 +147,19 @@ bool ProjectParser::compileWithWLLVMForDir(const fs::path& cmakeDir) {
     fs::current_path(cmakeDir);
     
     // 先删除build目录（如果存在）
-    std::cout << "删除旧的build目录..." << std::endl;
+    logInfo("删除旧的build目录...");
     if (fs::exists("build")) {
         fs::remove_all("build");
     }
     
     // 创建并切换到build目录
-    std::cout << "创建build目录..." << std::endl;
+    logInfo("创建build目录...");
     fs::create_directories("build");
     
     // 获取环境变量
     const char* harmonyOsPath = std::getenv("HARMONY_OS_PATH");
     if (harmonyOsPath == nullptr) {
-        std::cerr << "错误: 未设置HARMONY_OS_PATH环境变量" << std::endl;
+        logError("错误: 未设置HARMONY_OS_PATH环境变量");
         fs::current_path(currentPath);
         return false;
     }
@@ -166,31 +180,37 @@ bool ProjectParser::compileWithWLLVMForDir(const fs::path& cmakeDir) {
     setenv("OHOS_ARCH", "armeabi-v7a", 1);
     
     // 确认wllvm在PATH中
-    std::cout << "检查wllvm是否在PATH中..." << std::endl;
-    int checkWllvm = std::system("which wllvm");
-    if (checkWllvm != 0) {
-        std::cerr << "错误: wllvm未找到，请确保已正确安装并添加到PATH中" << std::endl;
-        fs::current_path(currentPath);
-        return false;
+    logInfo("检查wllvm是否在PATH中...");
+    {
+        std::string cmd = "which wllvm";
+        logInfo(std::string("命令: ") + cmd);
+        int checkWllvm = std::system(withLogRedirect(cmd).c_str());
+        if (checkWllvm != 0) {
+            logError("错误: wllvm未找到，请确保已正确安装并添加到PATH中");
+            fs::current_path(currentPath);
+            return false;
+        }
     }
     
     // 执行CMake命令
-    std::cout << "执行CMake配置..." << std::endl;
+    logInfo("执行CMake配置...");
     std::string toolchainPath = std::string(harmonyOsPath) + "/command-line-tools/sdk/default/openharmony/native/build/cmake/ohos.toolchain.svf.cmake";
     std::string cmakeConfigCmd = "cd build && \"" + cmakePath + "\" -DCMAKE_C_COMPILER=wllvm -DCMAKE_CXX_COMPILER=wllvm++ -DOHOS_STL=c++_shared -DOHOS_ARCH=armeabi-v7a -DOHOS_PLATFORM=OHOS -DCMAKE_TOOLCHAIN_FILE=\"" + toolchainPath + "\" ..";
-    int configResult = std::system(cmakeConfigCmd.c_str());
+    logInfo(std::string("命令: ") + cmakeConfigCmd);
+    int configResult = std::system(withLogRedirect(cmakeConfigCmd).c_str());
     if (configResult != 0) {
-        std::cerr << "错误: CMake配置失败" << std::endl;
+        logError("错误: CMake配置失败");
         fs::current_path(currentPath);
         return false;
     }
     
     // 执行CMake构建命令
-    std::cout << "执行CMake构建..." << std::endl;
+    logInfo("执行CMake构建...");
     std::string cmakeBuildCmd = "cd build && \"" + cmakePath + "\" --build .";
-    int buildResult = std::system(cmakeBuildCmd.c_str());
+    logInfo(std::string("命令: ") + cmakeBuildCmd);
+    int buildResult = std::system(withLogRedirect(cmakeBuildCmd).c_str());
     if (buildResult != 0) {
-        std::cerr << "错误: CMake构建失败" << std::endl;
+        logError("错误: CMake构建失败");
         fs::current_path(currentPath);
         return false;
     }
@@ -206,7 +226,7 @@ std::vector<std::string> ProjectParser::findSOFilesForDir(const fs::path& cmakeD
     
     fs::path buildDir = cmakeDir / "build";
     if (!fs::exists(buildDir)) {
-        std::cerr << "错误: build目录不存在: " << buildDir.string() << std::endl;
+    logError(std::string("错误: build目录不存在: ") + buildDir.string());
         return soFiles;
     }
     
@@ -226,7 +246,7 @@ bool ProjectParser::extractBitcodeForDir(const fs::path& cmakeDir, std::string p
     // 获取指定目录下的所有.so文件
     std::vector<std::string> soFiles = findSOFilesForDir(cmakeDir);
     if (soFiles.empty()) {
-        std::cerr << "错误: 在目录 " << cmakeDir.string() << " 中找不到.so文件" << std::endl;
+        logError(std::string("错误: 在目录 ") + cmakeDir.string() + " 中找不到.so文件");
         return false;
     }
     
@@ -262,26 +282,28 @@ bool ProjectParser::extractBitcodeForFile(const std::string& soFile, std::string
     
     // 切换到.so文件所在目录
     fs::path soDir = soPath.parent_path();
-    std::cout << "切换到目录: " << soDir.string() << std::endl;
+    logInfo(std::string("切换到目录: ") + soDir.string());
     fs::current_path(soDir);
     
     // 执行extract-bc命令提取bitcode
-    std::cout << "提取bitcode: " << soPath.filename().string() << std::endl;
-    std::string extractCmd = "extract-bc \"" + soPath.filename().string() + "\" -v"; // 添加-v参数获取更多信息
-    int extractResult = std::system(extractCmd.c_str());
+    logInfo(std::string("提取bitcode: ") + soPath.filename().string());
+    std::string extractCmd = std::string("extract-bc \"") + soPath.filename().string() + "\" -v"; // 添加-v参数获取更多信息
+    logInfo(std::string("命令: ") + extractCmd);
+    int extractResult = std::system(withLogRedirect(extractCmd).c_str());
     
     // 切换回原来的目录
     fs::current_path(currentPath);
     
     if (extractResult != 0) {
-        std::cerr << "错误: 提取bitcode失败: " << soFile << std::endl;
+        logError(std::string("错误: 提取bitcode失败: ") + soFile);
         
         // 尝试手动检查.llvm_bc节
-        std::cout << "手动检查.llvm_bc节..." << std::endl;
-        std::string checkSectionCmd = "llvm-objdump -h \"" + soFile + "\" | grep llvm_bc";
-        int checkResult = std::system(checkSectionCmd.c_str());
+        logInfo("手动检查.llvm_bc节...");
+        std::string checkSectionCmd = std::string("llvm-objdump -h \"") + soFile + "\" | grep llvm_bc";
+        logInfo(std::string("命令: ") + checkSectionCmd);
+        int checkResult = std::system(withLogRedirect(checkSectionCmd).c_str());
         if (checkResult != 0) {
-            std::cerr << "错误: 文件中不存在.llvm_bc节" << std::endl;
+            logError("错误: 文件中不存在.llvm_bc节");
         }
         
         return false;
@@ -289,7 +311,7 @@ bool ProjectParser::extractBitcodeForFile(const std::string& soFile, std::string
     
     // 检查生成的.bc文件是否存在
     if (!fs::exists(bcPath)) {
-        std::cerr << "错误: 生成的bitcode文件不存在: " << bcPath.string() << std::endl;
+        logError(std::string("错误: 生成的bitcode文件不存在: ") + bcPath.string());
         return false;
     }
     
@@ -302,7 +324,7 @@ bool ProjectParser::extractBitcodeForFile(const std::string& soFile, std::string
     
     libraries.push_back(libInfo);
     
-    std::cout << "成功提取bitcode: " << bcPath.string() << std::endl;
+    logInfo(std::string("成功提取bitcode: ") + bcPath.string());
     return true;
 }
 
@@ -335,4 +357,56 @@ std::vector<std::string> ProjectParser::getLLVMIRFiles() const {
 
 const std::vector<LibraryInfo>& ProjectParser::getLibraries() const {
     return libraries;
+}
+
+// ===== 日志辅助实现 =====
+std::string ProjectParser::makeLogFileNameFromPath(const fs::path& p) const {
+    std::string s = fs::absolute(p).string();
+    for (char& c : s) {
+        if (c == '/') c = '_';
+    }
+    return s;
+}
+
+void ProjectParser::openProjectLog(const fs::path& cmakeDir) {
+    closeProjectLog();
+    {
+        std::error_code ec;
+        fs::create_directories(logDir, ec);
+    }
+    // 使用相对路径转为下划线命名，避免包含绝对路径前缀
+    std::string fileName = extractProjectName(cmakeDir) + ".log";
+    currentLogFile = logDir / fileName;
+    logStream.open(currentLogFile, std::ios::out | std::ios::app);
+    if (logStream.is_open()) {
+        logStream << "==== 开始构建项目: " << cmakeDir.string() << " ====" << std::endl;
+    }
+}
+
+void ProjectParser::closeProjectLog() {
+    if (logStream.is_open()) {
+        logStream << "==== 结束 ====" << std::endl;
+        logStream.flush();
+        logStream.close();
+    }
+}
+
+void ProjectParser::logInfo(const std::string& msg) const {
+    if (logStream.is_open()) {
+        logStream << msg << std::endl;
+    }
+    std::cout << msg << std::endl;
+}
+
+void ProjectParser::logError(const std::string& msg) const {
+    if (logStream.is_open()) {
+        logStream << msg << std::endl;
+    }
+    std::cerr << msg << std::endl;
+}
+
+std::string ProjectParser::withLogRedirect(const std::string& cmd) const {
+    if (currentLogFile.empty()) return cmd; // 没有打开日志时直接返回
+    std::string quoted = std::string("\"") + currentLogFile.string() + "\"";
+    return cmd + " >> " + quoted + " 2>&1";
 }
