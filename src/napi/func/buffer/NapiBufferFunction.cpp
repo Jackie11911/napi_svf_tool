@@ -93,7 +93,7 @@ void handleNapiCreateBufferFunction(const llvm::Instruction* inst, TaintMap& tai
             summaryItemResult.addOperand(lengthConstant);
         }
         else{
-            handleTaintFlow(svfg, pag, lengthParam, taintMap, summaryItems, summaryItemResult, ander);
+           summaryItemResult.addOperand("top");
         }
 
         // 获取第三个参数
@@ -121,7 +121,7 @@ void handleNapiCreateBufferFunction(const llvm::Instruction* inst, TaintMap& tai
             summaryItemResult.addOperand(lengthConstant);
         }
         else{
-            handleTaintFlow(svfg, pag, lengthParam, taintMap, summaryItems, summaryItemResult, ander);
+            summaryItemResult.addOperand("top");
         }
 
         // 获取第三个参数

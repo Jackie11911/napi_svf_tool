@@ -86,7 +86,7 @@ void handleNapiElementFunction(const llvm::Instruction* inst, TaintMap& taintMap
         summaryItemResult.addOperand(indexConstant);
     }
     else{
-        handleTaintFlow(svfg, pag, indexParam, taintMap, summaryItems, summaryItemResult, ander);
+        summaryItemResult.addOperand("top");
     }
 
     // 处理第四个参数

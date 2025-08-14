@@ -16,6 +16,8 @@ std::pair<NodeID, int> parseLoadVFG(SVFVar* loadSVFVar, const SVFG* svfg, const 
         return std::make_pair(-1, -1);
     }
     const VFGNode* loadVNode = svfg->getDefSVFGNode(loadSVFVar);
+    std::cout << "[Debug] loadSVFVar ID: " << loadSVFVar->getId() << "\n";
+    std::cout << "[Debug] loadVNode: " << (loadVNode ? loadVNode->toString() : "nullptr") << "\n";
     if(!loadVNode){
         return std::make_pair(-1, -1);
     }
@@ -61,6 +63,10 @@ std::pair<NodeID, int> parseGepVFG(const SVFG* svfg, const SVFIR* pag, const SVF
     }
     const VFGNode* gepVNode = svfg->getDefSVFGNode(gepSVFVar);
 
+    // 打印调试信息
+    std::cout << "[Debug] gepSVFVar ID: " << gepSVFVar->getId() << "\n";
+    std::cout << "[Debug] gepVNode: " << (gepVNode ? gepVNode->toString() : "nullptr") << "\n";
+
     if(const GepVFGNode* gepVFGNode = SVFUtil::dyn_cast<GepVFGNode>(gepVNode)){
         int elementIndex = -1;
         if (const GepStmt* gepStmt = SVFUtil::dyn_cast<GepStmt>(gepVFGNode->getPAGEdge())) {
@@ -89,45 +95,58 @@ std::pair<NodeID, int> parseGepVFG(const SVFG* svfg, const SVFIR* pag, const SVF
     return std::make_pair(-1, -1);
 }
 
-std::vector<NodeID> bfsPredecessors(const SVFG* svfg, const SVFVar* startSVFVar, const SVFIR* pag) {
+std::vector<NodeID> bfsPredecessors(const SVFG* svfg, const SVFIR* pag, const SVFVar* startSVFVar) {
     std::vector<NodeID> results;
     std::set<const VFGNode*> visited;
-    if(!svfg->hasDefSVFGNode(startSVFVar)){
-        return results;
+    std::queue<const VFGNode*> q;
+
+    auto enqueue = [&](const VFGNode* n){ if(n) q.push(n); };
+
+    // 确定起点：优先用 Def 节点；若没有，则从全图中查找与该 Var 直接相关的语句节点
+    std::vector<const VFGNode*> startNodes;
+    if (svfg->hasDefSVFGNode(startSVFVar)) {
+        const VFGNode* startNode = svfg->getDefSVFGNode(startSVFVar);
+        if (startNode) startNodes.push_back(startNode);
     }
-    const VFGNode* startNode = svfg->getDefSVFGNode(startSVFVar);
-    if(!startNode){
-        return results;
-    }
-    std::queue<const VFGNode*> queue;
-    queue.push(startNode);
-    while(!queue.empty()){
-        const VFGNode* current = queue.front();
-        queue.pop();
-        if(visited.find(current) != visited.end()){
-            continue;
+    if (startNodes.empty()) {
+        NodeID targetId = startSVFVar->getId();
+        for (auto it = svfg->begin(), ie = svfg->end(); it != ie; ++it) {
+            const VFGNode* node = it->second;
+            if (const StmtVFGNode* stmt = SVFUtil::dyn_cast<StmtVFGNode>(node)) {
+                if (stmt->getPAGDstNodeID() == targetId || stmt->getPAGSrcNodeID() == targetId) {
+                    startNodes.push_back(node);
+                }
+            }
         }
-        visited.insert(current);
-        // 获取当前节点的直接赋值节点
-        const auto& inEdges = current->getInEdges();
-        for (const auto& edge : inEdges) {
-            // 检查边是否为直接值流边
-            if (const DirectSVFGEdge* dirEdge = SVFUtil::dyn_cast<DirectSVFGEdge>(edge)) {
-                const VFGNode* srcNode = dirEdge->getSrcNode();
-                if(const StmtVFGNode* stmtNode = SVFUtil::dyn_cast<StmtVFGNode>(srcNode)){
-                    NodeID srcNodeID = stmtNode->getPAGSrcNodeID();
-                    NodeID dstNodeID = stmtNode->getPAGDstNodeID();
-                    // 如果不存在则添加
-                    if(std::find(results.begin(), results.end(), srcNodeID) == results.end()){
-                        results.push_back(srcNodeID);
-                    }
-                    if(std::find(results.begin(), results.end(), dstNodeID) == results.end()){
-                        results.push_back(dstNodeID);
-                    }
-                }
-                if (visited.find(srcNode) == visited.end()) {
-                    queue.push(srcNode);
-                }
+    }
+    for (auto* n : startNodes) enqueue(n);
+    if (q.empty()) return results;
+
+    // 反向遍历所有进入边，收集可映射的 PAG NodeID，并打印详细调试信息
+    while(!q.empty()){
+        const VFGNode* current = q.front();
+        q.pop();
+        if (!visited.insert(current).second) continue;
+
+        std::cout << "[SVFG][BFS] Visit Node #" << current->getId() << "\n";
+        std::cout << current->toString() << std::endl;
+
+        for (const auto& edge : current->getInEdges()) {
+            const VFGNode* srcNode = edge->getSrcNode();
+            std::cout << "  <= from Node #" << srcNode->getId() << "\n";
+            std::cout << srcNode->toString() << std::endl;
+
+            if (const StmtVFGNode* stmtNode = SVFUtil::dyn_cast<StmtVFGNode>(srcNode)){
+                NodeID srcNodeID = stmtNode->getPAGSrcNodeID();
+                NodeID dstNodeID = stmtNode->getPAGDstNodeID();
+                if (srcNodeID != 0 && std::find(results.begin(), results.end(), srcNodeID) == results.end())
+                    results.push_back(srcNodeID);
+                if (dstNodeID != 0 && std::find(results.begin(), results.end(), dstNodeID) == results.end())
+                    results.push_back(dstNodeID);
+            }
+
+            if (visited.find(srcNode) == visited.end()) {
+                q.push(srcNode);
             }
         }
     }
@@ -142,16 +161,25 @@ std::vector<NodeID> getTaintmapExistingNodes(std::vector<NodeID>& nodeIDs, Taint
 
 
 int getTaintmapNewID(NodeID nodeID, TaintMap& taintMap, const SVFG* svfg, const SVFIR* pag, NodeID preNodeID) {
-    SVFVar* valueSVFVar = pag->getGNode(nodeID);
+    std::cout << "[Debug] getTaintmapNewID(nodeID=" << nodeID << ", preNodeID=" << preNodeID << ")\n";
+    SVFVar* valueSVFVar = pag->getGNode(preNodeID);
+    if (!valueSVFVar) {
+        std::cout << "[Debug] pag->getGNode(nodeID) returned null" << "\n";
+        return -1;
+    }
+    std::cout << "[Debug] valueSVFVar ID(from PAG): " << valueSVFVar->getId() << "\n";
     if(taintMap.getNewIds(preNodeID).size() == 1){
         return taintMap.getNewIds(preNodeID)[0];
     } else {
         int size = taintMap.getNewIds(preNodeID).size();
+        std::cout << "[Debug] preNodeID has " << size << " newIds in taintMap\n";
         std::pair<NodeID, int> loadPair = parseLoadVFG(valueSVFVar, svfg, pag);
+        std::cout << "[Debug] parseLoadVFG => baseNodeID=" << loadPair.first << ", index=" << loadPair.second << "\n";
         if(loadPair.first == -1){
             loadPair = parseGepVFG(svfg, pag, valueSVFVar);
+            std::cout << "[Debug] parseGepVFG  => baseNodeID=" << loadPair.first << ", index=" << loadPair.second << "\n";
         }
-        if(loadPair.first == preNodeID){
+        if(loadPair.first != -1){
             return taintMap.getNewIds(loadPair.first)[loadPair.second];
         }
     }
@@ -210,7 +238,7 @@ int parseIntValue(const SVFVar* intSVFVar, const SVFG* svfg, const SVFIR* pag, N
 void parseArgsOperand(const SVFG* svfg, const SVFIR* pag, NodeID valueParamNodeID, 
                     const SVFVar* valueSVFVar, TaintMap& taintMap, 
                     std::vector<SummaryItem>& summaryItems, SummaryItem& summaryItemResult, int argc, SVF::Andersen* ander) {
-    std::vector<NodeID> preNodeIDs = bfsPredecessors(svfg, valueSVFVar, pag);
+    std::vector<NodeID> preNodeIDs = bfsPredecessors(svfg, pag, valueSVFVar);
     std::vector<NodeID> existingNodeIDs = getTaintmapExistingNodes(preNodeIDs, taintMap, ander);
     if(existingNodeIDs.size() == 0){
         return;
@@ -238,7 +266,7 @@ int handlePhi(const SVFG* svfg, const SVFIR* pag, const llvm::Value* valueParam,
     if(newIDs.size() > 0){
         return newIDs[0];
     }
-    std::vector<NodeID> preNodeIDs = bfsPredecessors(svfg, valueSVFVar, pag);
+    std::vector<NodeID> preNodeIDs = bfsPredecessors(svfg, pag, valueSVFVar);
     std::vector<NodeID> existingNodeIDs = getTaintmapExistingNodes(preNodeIDs, taintMap, ander);
     if(existingNodeIDs.size() == 0){
         return -1;
@@ -247,34 +275,16 @@ int handlePhi(const SVFG* svfg, const SVFIR* pag, const llvm::Value* valueParam,
         return existingNodeIDs[0];
     }
     else {
-        int phiID1 = getTaintmapNewID(valueParamNodeID, taintMap, svfg, pag, existingNodeIDs[0]);
-        int phiID2 = getTaintmapNewID(valueParamNodeID, taintMap, svfg, pag, existingNodeIDs[1]);
-        
-        // 处理-1的情况
-        if(phiID1 == -1 && phiID2 == -1){
-            // 两个都为-1，assignNewId
-            int valueID = taintMap.assignNewId(valueParamNodeID);
-            return valueID;
-        } else if(phiID1 == -1){
-            // 只有phiID1为-1，使用phiID2
-            taintMap.setNewID(valueParamNodeID, phiID2);
-            return phiID2;
-        } else if(phiID2 == -1){
-            // 只有phiID2为-1，使用phiID1
-            taintMap.setNewID(valueParamNodeID, phiID1);
-            return phiID1;
+        // 遍历所有 existingNodeIDs，选择第一个 getTaintmapNewID 返回的非 -1
+        for (auto preId : existingNodeIDs) {
+            int cand = getTaintmapNewID(valueParamNodeID, taintMap, svfg, pag, preId);
+            if (cand != -1) {
+                taintMap.setNewID(valueParamNodeID, cand);
+                return cand;
+            }
         }
-        
-        // 两个都不为-1的情况
-        if(phiID1 == phiID2){
-            return phiID1;
-        }
+        // 全为 -1，则分配新的 ID
         int valueID = taintMap.assignNewId(valueParamNodeID);
-        SummaryItem phiItem1("", "Phi");
-        phiItem1.addOperand("%"+std::to_string(phiID1));
-        phiItem1.addOperand("%"+std::to_string(phiID2));
-        phiItem1.addRetValue("%"+std::to_string(valueID), -1);
-        summaryItems.push_back(phiItem1);
         return valueID;
     }
 }
@@ -295,7 +305,7 @@ void handleTaintFlow(const SVFG* svfg, const SVFIR* pag, const llvm::Value* valu
         preNodeIDs.push_back(objId);
         std::cout << "Points to: " << objId << std::endl;
     }
-    std::vector<NodeID> predecessors = bfsPredecessors(svfg, valueSVFVar, pag);
+    std::vector<NodeID> predecessors = bfsPredecessors(svfg, pag, valueSVFVar);
     preNodeIDs.insert(preNodeIDs.end(), predecessors.begin(), predecessors.end());
     std::vector<NodeID> existingNodeIDs = getTaintmapExistingNodes(preNodeIDs, taintMap, ander);
     if(existingNodeIDs.size() == 0) {
@@ -318,40 +328,18 @@ void handleTaintFlow(const SVFG* svfg, const SVFIR* pag, const llvm::Value* valu
         taintMap.setNewID(valueParamNodeID, newID);
         summaryItemResult.addOperand("%"+std::to_string(newID));
     } else {
-        int phiID1 = getTaintmapNewID(valueParamNodeID, taintMap, svfg, pag, existingNodeIDs[0]);
-        int phiID2 = getTaintmapNewID(valueParamNodeID, taintMap, svfg, pag, existingNodeIDs[1]);
-        
-        // 处理-1的情况
-        if(phiID1 == -1 && phiID2 == -1){
-            // 两个都为-1，assignNewId
-            int valueID = taintMap.assignNewId(valueParamNodeID);
-            summaryItemResult.addOperand("%"+std::to_string(valueID));
-        } else if(phiID1 == -1){
-            // 只有phiID1为-1，使用phiID2
-            taintMap.setNewID(valueParamNodeID, phiID2);
-            summaryItemResult.addOperand("%"+std::to_string(phiID2));
-        } else if(phiID2 == -1){
-            // 只有phiID2为-1，使用phiID1
-            taintMap.setNewID(valueParamNodeID, phiID1);
-            summaryItemResult.addOperand("%"+std::to_string(phiID1));
-        } else {
-            // 两个都不为-1的情况
-            if(phiID1 == phiID2){
-                taintMap.setNewID(valueParamNodeID, phiID1);
-                summaryItemResult.addOperand("%"+std::to_string(phiID1));
-            } else {
-                int valueID = taintMap.assignNewId(valueParamNodeID);
-                taintMap.addValueFlowSource(valueID, phiID1);
-                taintMap.addValueFlowSource(valueID, phiID2);
-                
-                SummaryItem phiItem1("", "Phi");
-                phiItem1.addOperand("%"+std::to_string(phiID1));
-                phiItem1.addOperand("%"+std::to_string(phiID2));
-                phiItem1.addRetValue("%"+std::to_string(valueID), -1);
-                summaryItems.push_back(phiItem1);
-                summaryItemResult.addOperand("%"+std::to_string(valueID));
+        // 遍历所有 existingNodeIDs，逐个尝试获取可用 newID
+        for (auto preId : existingNodeIDs) {
+            int cand = getTaintmapNewID(valueParamNodeID, taintMap, svfg, pag, preId);
+            if (cand != -1) {
+                taintMap.setNewID(valueParamNodeID, cand);
+                summaryItemResult.addOperand("%"+std::to_string(cand));
+                return;
             }
         }
+        // 全为 -1，则分配新的 ID
+        int valueID = taintMap.assignNewId(valueParamNodeID);
+        summaryItemResult.addOperand("%"+std::to_string(valueID));
     }
 }
 
@@ -472,4 +460,19 @@ std::string parseConstant(const llvm::Value* value) {
         std::cout << "The value is not a constant." << std::endl;
     }
     return "";
+}
+
+NodeID parseArgvValue(SVFVar* argvSVFVar, const SVFG* svfg, const SVFIR* pag) {
+    // 目标：找到 argv 指向的最顶层 NodeID（例如数组基指针），优先使用 BFS 反向回溯得到的上游候选
+    if (argvSVFVar == nullptr) return -1;
+
+    // 先尝试使用现有的 BFS 逻辑回溯与该 Var 相关的上游 PAG NodeID 集合
+    std::vector<NodeID> preds = bfsPredecessors(svfg, pag, argvSVFVar);
+
+    // 返回 preds 的最后一个元素（如果存在）
+    if (!preds.empty()) {
+        return preds.back();
+    }
+
+    return -1;
 }

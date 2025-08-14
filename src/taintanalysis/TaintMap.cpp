@@ -153,8 +153,7 @@ std::vector<SVF::NodeID> TaintMap::getExistingNodes(std::vector<SVF::NodeID>& no
         
         // 如果应该添加且result中没有则添加
         if (shouldAdd && std::find(result.begin(), result.end(), node) == result.end()) {
-            result.push_back(node);
-            
+            result.push_back(node);  
             // 如果节点是通过别名关系发现的，且不在nodeToNewIds中，则将其添加到映射中
             if (nodeToNewIds.find(node) == nodeToNewIds.end() && aliasNodeId != 0) {
                 // 复制别名节点的所有新ID到当前节点

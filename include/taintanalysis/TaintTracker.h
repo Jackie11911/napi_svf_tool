@@ -38,25 +38,16 @@ public:
     // 检查指定节点是否被污染
     bool isTainted(SVF::NodeID id) const;
     void initializeFunctionArgs(const llvm::Function* func);
-    std::vector<TaintUnit> propagateTaint(const llvm::Function* func);
     nlohmann::json Traceker(const llvm::Function* func, std::vector<std::pair<SVF::NodeID, std::string>> paramNodeIDs, std::string funcName);
 
     bool isInstructionTainted(const llvm::Instruction* inst);
 
     std::vector<const llvm::Function*> getCalledFunctions(const llvm::Function* F, std::set<const llvm::Function*>& visited);
-
-    std::vector<TaintUnit> handleTaintedInstruction(const llvm::Instruction* inst);
-    TaintUnit handleLoadInstruction(const llvm::Instruction* inst);
-    TaintUnit handleStoreInstruction(const llvm::Instruction* inst);
-    std::vector<TaintUnit> handleCallInstruction(const llvm::Instruction* inst);
-    TaintUnit handleDefaultInstruction(const llvm::Instruction* inst);
-    TaintUnit handleIndirectCall(const llvm::Instruction* inst);
     TaintUnit handleDirectAssignment(const llvm::Instruction* inst);
     TaintUnit handlePhiInstruction(const llvm::Instruction* inst);
     TaintUnit handleReturnInstruction(const llvm::Instruction* inst);
     std::vector<TaintUnit> handleInvokeInstruction(const llvm::Instruction* inst);
     std::vector<TaintUnit> handleCallBase(const llvm::CallBase* callBase);
-    void propagateTaintToCalleeArg(const llvm::Function* callee, unsigned argIdx, SVF::NodeID srcNodeId);
     bool isFunctionReturnTainted(const llvm::Function* func);
  
     void aliasAnalysis(SVF::NodeID id);

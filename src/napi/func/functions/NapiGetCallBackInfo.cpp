@@ -6,6 +6,7 @@
 #include "Graphs/VFG.h"
 #include "Graphs/SVFG.h"
 #include "Graphs/VFGEdge.h"
+#include "napi/utils/ParseVFG.h"
 
 
 using namespace SVF;
@@ -66,21 +67,7 @@ int parseArgcValue(SVFVar* argcSVFVar, const SVFG* svfg, const SVFIR* pag, NodeI
     return -1;
 }
 
-NodeID parseArgvValue(SVFVar* argvSVFVar, const SVFG* svfg, const SVFIR* pag) {
-    if(!svfg->hasDefSVFGNode(argvSVFVar)){
-        return -1;
-    }
-    const VFGNode* argvVNode = svfg->getDefSVFGNode(argvSVFVar);
-    if(!argvVNode){
-        return -1;
-    }
-    if (const GepVFGNode* gepNode = SVFUtil::dyn_cast<GepVFGNode>(argvVNode)){
-        const SVFVar* gepVar = gepNode->getPAGSrcNode();
-        NodeID gepNodeID = gepVar->getId();
-        return gepNodeID;
-    }
-    return -1;
-}
+// parseArgvValue 已移动到 ParseVFG.cpp，并在 ParseVFG.h 中声明
 
 void handleNapiGetCbInfo(const llvm::Instruction* inst, TaintMap& taintMap, const SVFG* svfg, const SVFIR* pag, SVF::Andersen* ander, std::vector<SummaryItem>& summaryItems) {
     

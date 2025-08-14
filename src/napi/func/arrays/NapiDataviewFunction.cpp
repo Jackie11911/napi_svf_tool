@@ -77,7 +77,7 @@ void handleNapiDataviewFunction(const llvm::Instruction* inst, TaintMap& taintMa
             summaryItemResult.addOperand(lengthConstant);
         }
         else{
-            handleTaintFlow(svfg, pag, lengthParam, taintMap, summaryItems, summaryItemResult, ander);
+            summaryItemResult.addOperand("top");
         }
 
         // 第三个参数
@@ -96,7 +96,7 @@ void handleNapiDataviewFunction(const llvm::Instruction* inst, TaintMap& taintMa
             summaryItemResult.addOperand(byteOffsetConstant);
         }
         else{
-            handleTaintFlow(svfg, pag, byteOffsetParam, taintMap, summaryItems, summaryItemResult, ander);
+            summaryItemResult.addOperand("top");
         }
 
         // 第五个参数

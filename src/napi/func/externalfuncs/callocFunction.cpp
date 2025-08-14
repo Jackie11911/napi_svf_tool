@@ -44,7 +44,7 @@ void handleCalloc(const llvm::Instruction* inst, TaintMap& taintMap, const SVFG*
         }
         summaryItemResult.addOperand(nmembConstant);
     } else {
-        handleTaintFlow(svfg, pag, nmembParam, taintMap, summaryItems, summaryItemResult, ander);
+        summaryItemResult.addOperand("top");
     }
 
     // 处理第二个参数 (size)
@@ -56,7 +56,7 @@ void handleCalloc(const llvm::Instruction* inst, TaintMap& taintMap, const SVFG*
         }
         summaryItemResult.addOperand(sizeConstant);
     } else {
-        handleTaintFlow(svfg, pag, sizeParam, taintMap, summaryItems, summaryItemResult, ander);
+        summaryItemResult.addOperand("top");
     }
 
     // return value

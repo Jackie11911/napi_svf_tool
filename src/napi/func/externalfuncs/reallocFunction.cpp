@@ -62,7 +62,7 @@ void handleRealloc(const llvm::Instruction* inst, TaintMap& taintMap, const SVFG
         }
         summaryItemResult.addOperand(sizeConstant);
     } else {
-        handleTaintFlow(svfg, pag, sizeParam, taintMap, summaryItems, summaryItemResult, ander);
+        summaryItemResult.addOperand("top");
     }
 
     // return value

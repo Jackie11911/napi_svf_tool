@@ -83,7 +83,7 @@ void handleNapiArrayFunction(const llvm::Instruction* inst, TaintMap& taintMap, 
             summaryItemResult.addOperand(lengthConstant);
         }
         else{
-            handleTaintFlow(svfg, pag, lengthParam, taintMap, summaryItems, summaryItemResult, ander);
+            summaryItemResult.addOperand("top");
         }
 
         // 获取第三个参数
