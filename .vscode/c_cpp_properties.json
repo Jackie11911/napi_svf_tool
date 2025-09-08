@@ -4,18 +4,17 @@
             "name": "Linux",
             "intelliSenseMode": "clang-x64",
             "includePath": [
-                "/home/jackie/project/SVF/llvm-16.0.0.obj/include/**",
-                "/home/jackie/project/SVF/svf/include/**",
-                "/home/jackie/project/SVF/svf-llvm/include/**",
-                "/home/jackie/project/SVF/Debug-build/include/**",
-                "/home/jackie/project/SVF-example/include/**"
+                "${env:LLVM_DIR}/include/**",
+                "${env:SVF_DIR}/svf/include/**",
+                "${env:SVF_DIR}/svf-llvm/include/**",
+                "${env:SVF_DIR}/Debug-build/include/**"
             ],
-            "compilerPath": "/home/jackie/project/SVF/llvm-16.0.0.obj/bin/clang++",
+            "compilerPath": "${env:LLVM_DIR}/bin/clang++",
             "cStandard": "c11",
             "cppStandard": "c++17",
             "browse": {
                 "path": [
-                    "/home/jackie/project/SVF"
+                    "${env:SVF_DIR}"
                 ],
                 "limitSymbolsToIncludedHeaders": true,
                 "databaseFilename": ""

@@ -6,7 +6,7 @@
             "type": "shell",
             "command": "cmake",
             "args": [
-                "-DCMAKE_CXX_COMPILER=/home/jackie/project/SVF/llvm-16.0.0.obj/bin/clang++",
+                "-DCMAKE_CXX_COMPILER=${env:LLVM_DIR}/bin/clang++",
                 ".",
                 "-DCMAKE_BUILD_TYPE=Debug",
                 "-DLLVM_ENABLE_EH=ON"

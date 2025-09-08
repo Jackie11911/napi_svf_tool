@@ -5,8 +5,8 @@
             "name": "Debug",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/src/napi_svf_tool",  // 需要替换成你的可执行文件名
-            "args": ["napi_project/HarmonyXFlowBench/native_multiple_libraries"],
+            "program": "${workspaceFolder}/src/napi_svf_tool", 
+            "args": ["xxx"],// 鸿蒙项目路径
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
