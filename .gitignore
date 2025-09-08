@@ -1,0 +1,13 @@
+BUILD/
+build/
+.cache/
+CMakeFiles/
+napi_project/
+result/
+napi_analysis.log
+src/napi_svf_tool
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+build_log/
+README/

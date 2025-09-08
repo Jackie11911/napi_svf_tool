@@ -1,0 +1,27 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "intelliSenseMode": "clang-x64",
+            "includePath": [
+                "/home/jackie/project/SVF/llvm-16.0.0.obj/include/**",
+                "/home/jackie/project/SVF/svf/include/**",
+                "/home/jackie/project/SVF/svf-llvm/include/**",
+                "/home/jackie/project/SVF/Debug-build/include/**",
+                "/home/jackie/project/SVF-example/include/**"
+            ],
+            "compilerPath": "/home/jackie/project/SVF/llvm-16.0.0.obj/bin/clang++",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "browse": {
+                "path": [
+                    "/home/jackie/project/SVF"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            },
+            "configurationProvider": "ms-vscode.cmake-tools"
+        }
+    ],
+    "version": 4
+}
