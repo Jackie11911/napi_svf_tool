@@ -18,6 +18,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <cstdlib> // for getenv
+#include <chrono>
+#include <iomanip>
+#include <fstream>
 using namespace llvm;
 using namespace std;
 using namespace SVF;
@@ -27,6 +30,59 @@ using namespace SVF;
 namespace fs = std::filesystem;
 
 static bool DEBUG_MODE = false;
+
+// 计时工具类
+class Timer {
+private:
+    std::chrono::high_resolution_clock::time_point start_time;
+    std::string timer_name;
+    
+public:
+    Timer(const std::string& name) : timer_name(name) {
+        start_time = std::chrono::high_resolution_clock::now();
+    }
+    
+    double elapsed() const {
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        return duration.count() / 1000.0; // 返回秒数
+    }
+    
+    void printElapsed() const {
+        double elapsed_time = elapsed();
+        SVFUtil::outs() << timer_name << " 耗时: " << std::fixed << std::setprecision(3) 
+                       << elapsed_time << " 秒\n";
+    }
+};
+
+// 时间统计结构
+struct TimeStats {
+    std::string libraryName;
+    double projectParsingTime = 0.0;
+    double svfConstructionTime = 0.0;
+    double propertyAnalysisTime = 0.0;
+    double taintAnalysisTime = 0.0;
+    double totalLibraryTime = 0.0;
+    
+    void writeToFile(const std::string& outputPath) const {
+        nlohmann::json timeJson;
+        timeJson["library_name"] = libraryName;
+        timeJson["timing_stats"] = {
+            {"svf_construction_time_seconds", svfConstructionTime},
+            {"property_analysis_time_seconds", propertyAnalysisTime},
+            {"taint_analysis_time_seconds", taintAnalysisTime},
+            {"total_library_time_seconds", totalLibraryTime}
+        };
+        
+        std::string timeFile = outputPath + ".timing.json";
+        std::ofstream file(timeFile);
+        if (file.is_open()) {
+            file << timeJson.dump(4, ' ', false);
+            file.close();
+            SVFUtil::outs() << "时间统计写入文件: " << timeFile << "\n";
+        }
+    }
+};
 
 /*!
  * An example to query alias results of two LLVM values
@@ -136,7 +192,10 @@ void traverseOnVFG(const SVFG* vfg, const SVFVar* svfval, PAG* pag)
 
 
 /// 对单个库进行SVF分析并生成JSON输出
-void analyzeSingleLibrary(const LibraryInfo& lib) {
+TimeStats analyzeSingleLibrary(const LibraryInfo& lib) {
+    Timer totalTimer("库 " + lib.name + " 总分析");
+    TimeStats stats;
+    stats.libraryName = lib.name;
 
     fs::path resultDir = fs::current_path() / "result";
     if (!fs::exists(resultDir)) {
@@ -160,6 +219,10 @@ void analyzeSingleLibrary(const LibraryInfo& lib) {
     // } else {
     //     SVFUtil::errs() << "环境变量 SVF_DIR 未设置，无法添加 extapi.bc\n";
     // }
+
+    // SVF构造计时开始
+    Timer svfTimer("SVF构造");
+    SVFUtil::outs() << "开始SVF构造 for " << lib.name << "\n";
 
     if (Options::WriteAnder() == "ir_annotator") {
         LLVMModuleSet::preProcessBCs(moduleNameVec);
@@ -187,6 +250,13 @@ void analyzeSingleLibrary(const LibraryInfo& lib) {
     SVFGBuilder svfBuilder;
     SVFG* svfg = svfBuilder.buildFullSVFG(ander);
 
+    stats.svfConstructionTime = svfTimer.elapsed();
+    svfTimer.printElapsed();
+
+    // 属性解析计时开始
+    Timer propertyTimer("属性解析");
+    SVFUtil::outs() << "开始属性解析 for " << lib.name << "\n";
+
     std::set<llvm::GlobalVariable*> globalVars = NapiPropertiesAnalyzer::analyzeNapiProperties(svfg, pag);
     std::map<std::string, llvm::Function*> llvmfunctions = NapiPropertiesAnalyzer::analyzeGlobalVars(globalVars);
 
@@ -195,6 +265,13 @@ void analyzeSingleLibrary(const LibraryInfo& lib) {
 
     // 合并两种注册方式的分析结果
     llvmfunctions.insert(namedFunctions.begin(), namedFunctions.end());
+
+    stats.propertyAnalysisTime = propertyTimer.elapsed();
+    propertyTimer.printElapsed();
+
+    // 污点分析计时开始
+    Timer taintTimer("污点分析");
+    SVFUtil::outs() << "开始污点分析 for " << lib.name << "\n";
 
     TaintTracker taintTracker(pag, ander, svfg, vfg);
     nlohmann::json allResults = nlohmann::json::array();
@@ -225,6 +302,9 @@ void analyzeSingleLibrary(const LibraryInfo& lib) {
 
     JsonOutput::writeToFile(outputfilename, finalJson.dump(4, ' ', false));
 
+    stats.taintAnalysisTime = taintTimer.elapsed();
+    taintTimer.printElapsed();
+
     // 清理内存
     delete vfg;
     vfg = nullptr;
@@ -232,10 +312,20 @@ void analyzeSingleLibrary(const LibraryInfo& lib) {
     SVFIR::releaseSVFIR();
     LLVMModuleSet::getLLVMModuleSet()->dumpModulesToFile(".svf.bc");
     SVF::LLVMModuleSet::releaseLLVMModuleSet();
+
+    stats.totalLibraryTime = totalTimer.elapsed();
+    totalTimer.printElapsed();
+
+    // 写入单个库的时间统计文件
+    stats.writeToFile(outputfilename);
+
+    return stats;
 }
 
 int main(int argc, char ** argv)
 {
+    Timer totalProgramTimer("整个程序");
+    
     // 检查命令行参数
     if (argc < 2) {
         SVFUtil::errs() << "用法: " << argv[0] << " <项目路径>\n";
@@ -243,17 +333,29 @@ int main(int argc, char ** argv)
         return 1;
     }
 
+    // 项目解析计时
+    Timer parsingTimer("项目解析");
+    SVFUtil::outs() << "开始解析项目: " << argv[1] << "\n";
+    
     // 调用ProjectParser解析项目
     ProjectParser projectParser(argv[1]);
     std::vector<LibraryInfo> libraries = projectParser.getLibraries();
     
+    double projectParsingTime = parsingTimer.elapsed();
+    parsingTimer.printElapsed();
+    
+    SVFUtil::outs() << "共发现 " << libraries.size() << " 个库需要分析\n";
+    
+    // 存储所有库的时间统计
+    std::vector<TimeStats> allLibraryStats;
 
     if (DEBUG_MODE) {
         // 调试模式：串行处理每个库
         SVFUtil::outs() << "使用调试模式：串行处理库\n";
         for (const LibraryInfo& lib : libraries) {
             SVFUtil::outs() << "开始分析库: " << lib.name << "\n";
-            analyzeSingleLibrary(lib);
+            TimeStats stats = analyzeSingleLibrary(lib);
+            allLibraryStats.push_back(stats);
         }
     } else {
         // 生产模式：使用多进程
@@ -291,6 +393,63 @@ int main(int argc, char ** argv)
                 SVFUtil::errs() << "子进程 " << child_pid << " 被信号 " << WTERMSIG(status) << " 终止\n";
             }
         }
+        
+        // 在多进程模式下，需要从文件中读取各个库的统计信息
+        // 因为子进程的统计信息无法直接返回给父进程
+        SVFUtil::outs() << "多进程模式下，各库的详细时间统计请查看对应的 .timing.json 文件\n";
+    }
+    
+    double totalProgramTime = totalProgramTimer.elapsed();
+    totalProgramTimer.printElapsed();
+    
+    // 生成全量时间统计文件
+    fs::path resultDir = fs::current_path() / "result";
+    std::string summaryFile = (resultDir / "overall_timing_summary.json").string();
+    
+    nlohmann::json summaryJson;
+    summaryJson["analysis_summary"] = {
+        {"project_path", argv[1]},
+        {"total_libraries", libraries.size()},
+        {"project_parsing_time_seconds", projectParsingTime},
+        {"total_program_time_seconds", totalProgramTime},
+        {"execution_mode", DEBUG_MODE ? "debug_serial" : "production_multiprocess"}
+    };
+    
+    if (DEBUG_MODE && !allLibraryStats.empty()) {
+        // 在调试模式下，我们有所有库的详细统计信息
+        nlohmann::json librariesJson = nlohmann::json::array();
+        double totalSvfTime = 0.0, totalPropertyTime = 0.0, totalTaintTime = 0.0, totalLibraryTime = 0.0;
+        
+        for (const TimeStats& stats : allLibraryStats) {
+            nlohmann::json libJson;
+            libJson["library_name"] = stats.libraryName;
+            libJson["svf_construction_time_seconds"] = stats.svfConstructionTime;
+            libJson["property_analysis_time_seconds"] = stats.propertyAnalysisTime;
+            libJson["taint_analysis_time_seconds"] = stats.taintAnalysisTime;
+            libJson["total_library_time_seconds"] = stats.totalLibraryTime;
+            
+            librariesJson.push_back(libJson);
+            
+            totalSvfTime += stats.svfConstructionTime;
+            totalPropertyTime += stats.propertyAnalysisTime;
+            totalTaintTime += stats.taintAnalysisTime;
+            totalLibraryTime += stats.totalLibraryTime;
+        }
+        
+        summaryJson["libraries_detail"] = librariesJson;
+        summaryJson["aggregated_stats"] = {
+            {"total_svf_construction_time_seconds", totalSvfTime},
+            {"total_property_analysis_time_seconds", totalPropertyTime},
+            {"total_taint_analysis_time_seconds", totalTaintTime},
+            {"total_all_libraries_time_seconds", totalLibraryTime}
+        };
+    }
+    
+    std::ofstream summaryOutFile(summaryFile);
+    if (summaryOutFile.is_open()) {
+        summaryOutFile << summaryJson.dump(4, ' ', false);
+        summaryOutFile.close();
+        SVFUtil::outs() << "整体时间统计写入文件: " << summaryFile << "\n";
     }
 
     llvm::llvm_shutdown();

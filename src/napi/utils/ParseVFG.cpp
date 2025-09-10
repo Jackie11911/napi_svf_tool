@@ -316,6 +316,7 @@ void handleTaintFlow(const SVFG* svfg, const SVFIR* pag, const llvm::Value* valu
             if(intValue != -1){
                 summaryItemResult.addOperand("long "+std::to_string(intValue));
                 hasInt = true;
+                break;
             }
         } 
         if(!hasInt){
