@@ -102,6 +102,22 @@ std::set<GlobalVariable*> NapiPropertiesAnalyzer::analyzeNapiProperties(SVFG* sv
                                     }
                                 }
                             }
+                            else{
+                                if (AllocaInst* alloca = SVFUtil::dyn_cast<AllocaInst>(propArrayArg)) {
+                                    // 搜索该alloca的所有使用者，找到memcpy指令
+                                    for (User* user : alloca->users()) {
+                                        if (MemCpyInst* memcpy = SVFUtil::dyn_cast<MemCpyInst>(user)) {
+                                            if (Constant* src = SVFUtil::dyn_cast<Constant>(memcpy->getSource())) {
+                                                // 剥离可能的bitcast操作
+                                                if (GlobalVariable* global = SVFUtil::dyn_cast<GlobalVariable>(src->stripPointerCasts())) {
+                                                    SVFUtil::outs() << "Found target global: " << global->getName().str() << "\n";
+                                                    globalVars.insert(global);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
