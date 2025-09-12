@@ -123,7 +123,8 @@ std::vector<NodeID> bfsPredecessors(const SVFG* svfg, const SVFIR* pag, const SV
     if (q.empty()) return results;
 
     // 反向遍历所有进入边，收集可映射的 PAG NodeID，并打印详细调试信息
-    while(!q.empty()){
+    const size_t MAX_RESULTS = 20; // 设置最大结果数量限制
+    while(!q.empty() && results.size() < MAX_RESULTS){
         const VFGNode* current = q.front();
         q.pop();
         if (!visited.insert(current).second) continue;
@@ -139,10 +140,14 @@ std::vector<NodeID> bfsPredecessors(const SVFG* svfg, const SVFIR* pag, const SV
             if (const StmtVFGNode* stmtNode = SVFUtil::dyn_cast<StmtVFGNode>(srcNode)){
                 NodeID srcNodeID = stmtNode->getPAGSrcNodeID();
                 NodeID dstNodeID = stmtNode->getPAGDstNodeID();
-                if (srcNodeID != 0 && std::find(results.begin(), results.end(), srcNodeID) == results.end())
+                if (srcNodeID != 0 && std::find(results.begin(), results.end(), srcNodeID) == results.end()) {
                     results.push_back(srcNodeID);
-                if (dstNodeID != 0 && std::find(results.begin(), results.end(), dstNodeID) == results.end())
+                    if (results.size() >= MAX_RESULTS) break; // 达到限制时退出内层循环
+                }
+                if (dstNodeID != 0 && std::find(results.begin(), results.end(), dstNodeID) == results.end()) {
                     results.push_back(dstNodeID);
+                    if (results.size() >= MAX_RESULTS) break; // 达到限制时退出内层循环
+                }
             }
 
             if (visited.find(srcNode) == visited.end()) {
