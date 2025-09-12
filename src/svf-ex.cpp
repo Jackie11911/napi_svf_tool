@@ -276,21 +276,74 @@ TimeStats analyzeSingleLibrary(const LibraryInfo& lib) {
     TaintTracker taintTracker(pag, ander, svfg, vfg);
     nlohmann::json allResults = nlohmann::json::array();
 
+    // 为每个函数创建子进程进行分析
+    std::vector<pid_t> function_pids;
+    std::vector<std::string> tempFileNames;
+    int funcIndex = 0;
+
     for (auto& func : llvmfunctions) {
-        taintTracker.initializeFunctionArgs(func.second);
         std::string funcName = func.first;
-        std::vector<std::pair<NodeID, std::string>> paramNodeIDs;
-
-        for(auto& arg : func.second->args()) {
-            Value* argVal = &arg;
-            NodeID argNodeID = LLVMModuleSet::getLLVMModuleSet()->getValueNode(argVal);
-            SVFVar* svfVar = pag->getGNode(argNodeID);
-            std::string argname = svfVar->getValueName();
-            paramNodeIDs.push_back(std::make_pair(argNodeID, argname));
+        std::string tempFileName = "/tmp/taint_result_" + lib.name + "_" + std::to_string(funcIndex) + "_" + std::to_string(getpid()) + ".json";
+        tempFileNames.push_back(tempFileName);
+        
+        pid_t pid = fork();
+        
+        if (pid < 0) {
+            SVFUtil::errs() << "无法为函数 " << funcName << " 创建子进程\n";
+            continue;
         }
+        else if (pid == 0) {
+            // 子进程：分析单个函数
+            taintTracker.initializeFunctionArgs(func.second);
+            std::vector<std::pair<NodeID, std::string>> paramNodeIDs;
 
-        nlohmann::json outputJson = taintTracker.Traceker(func.second, paramNodeIDs, funcName);
-        allResults.push_back(outputJson);
+            for(auto& arg : func.second->args()) {
+                Value* argVal = &arg;
+                NodeID argNodeID = LLVMModuleSet::getLLVMModuleSet()->getValueNode(argVal);
+                SVFVar* svfVar = pag->getGNode(argNodeID);
+                std::string argname = svfVar->getValueName();
+                paramNodeIDs.push_back(std::make_pair(argNodeID, argname));
+            }
+
+            nlohmann::json outputJson = taintTracker.Traceker(func.second, paramNodeIDs, funcName);
+            
+            // 将结果写入临时文件
+            std::ofstream tempFile(tempFileName);
+            if (tempFile.is_open()) {
+                tempFile << outputJson.dump();
+                tempFile.close();
+            }
+            
+            exit(0); // 子进程完成
+        }
+        else {
+            // 父进程：记录子进程PID
+            function_pids.push_back(pid);
+        }
+        
+        funcIndex++;
+    }
+
+    // 父进程等待所有函数分析子进程完成并收集结果
+    for (size_t i = 0; i < function_pids.size(); i++) {
+        int status;
+        waitpid(function_pids[i], &status, 0);
+        
+        // 读取临时文件中的结果
+        std::ifstream tempFile(tempFileNames[i]);
+        if (tempFile.is_open()) {
+            std::string jsonStr((std::istreambuf_iterator<char>(tempFile)),
+                               std::istreambuf_iterator<char>());
+            tempFile.close();
+            
+            if (!jsonStr.empty()) {
+                nlohmann::json resultJson = nlohmann::json::parse(jsonStr);
+                allResults.push_back(resultJson);
+            }
+            
+            // 删除临时文件
+            std::remove(tempFileNames[i].c_str());
+        }
     }
 
     // 创建最终的 JSON 对象

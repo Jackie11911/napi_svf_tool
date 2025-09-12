@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/src/napi_svf_tool", 
-            "args": ["napi_project/HarmonyXFlowBench/native_multiple_interaction"],// 鸿蒙项目路径
+            "args": ["napi_project/HarmonyXFlowBench/native_multiple_libraries"],// 鸿蒙项目路径
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
