@@ -56,6 +56,46 @@ public:
     }
 };
 
+// 超时管理辅助函数
+bool waitProcessWithTimeout(pid_t pid, int timeoutSeconds, const std::string& processName) {
+    auto startTime = std::chrono::high_resolution_clock::now();
+    int status;
+    
+    while (true) {
+        pid_t result = waitpid(pid, &status, WNOHANG);
+        
+        if (result > 0) {
+            // 进程正常结束
+            if (WIFEXITED(status)) {
+                SVFUtil::outs() << processName << " 进程 " << pid << " 正常完成\n";
+            } else if (WIFSIGNALED(status)) {
+                SVFUtil::outs() << processName << " 进程 " << pid << " 被信号终止\n";
+            }
+            return true;
+        } else if (result == 0) {
+            // 进程仍在运行，检查超时
+            auto now = std::chrono::high_resolution_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startTime);
+            
+            if (elapsed.count() >= timeoutSeconds) {
+                // 超时，强制终止
+                SVFUtil::errs() << processName << " 进程 " << pid << " 超时，强制终止\n";
+                kill(pid, SIGTERM);
+                sleep(2);
+                if (waitpid(pid, &status, WNOHANG) == 0) {
+                    kill(pid, SIGKILL);
+                    waitpid(pid, &status, 0);
+                }
+                return false;
+            }
+            sleep(1); // 等待1秒后再检查
+        } else {
+            SVFUtil::errs() << "等待 " << processName << " 进程 " << pid << " 时出错\n";
+            return false;
+        }
+    }
+}
+
 // 时间统计结构
 struct TimeStats {
     std::string libraryName;
@@ -280,7 +320,6 @@ TimeStats analyzeSingleLibrary(const LibraryInfo& lib) {
     // 为每个函数创建子进程进行分析
     std::vector<pid_t> function_pids;
     std::vector<std::string> tempFileNames;
-    std::vector<std::chrono::high_resolution_clock::time_point> process_start_times;
     int funcIndex = 0;
     const int TIMEOUT_MINUTES = 10;
     const int TIMEOUT_SECONDS = TIMEOUT_MINUTES * 60;
@@ -321,9 +360,8 @@ TimeStats analyzeSingleLibrary(const LibraryInfo& lib) {
             exit(0); // 子进程完成
         }
         else {
-            // 父进程：记录子进程PID和启动时间
+            // 父进程：记录子进程PID
             function_pids.push_back(pid);
-            process_start_times.push_back(std::chrono::high_resolution_clock::now());
             SVFUtil::outs() << "启动子进程 " << pid << " 分析函数 " << funcName << "，超时限制: " << TIMEOUT_MINUTES << " 分钟\n";
         }
         
@@ -332,63 +370,11 @@ TimeStats analyzeSingleLibrary(const LibraryInfo& lib) {
 
     // 父进程等待所有函数分析子进程完成并收集结果
     for (size_t i = 0; i < function_pids.size(); i++) {
-        int status;
         pid_t child_pid = function_pids[i];
-        bool process_completed = false;
-        bool process_killed = false;
+        bool completed = waitProcessWithTimeout(child_pid, TIMEOUT_SECONDS, "函数分析");
         
-        // 检查进程是否在超时时间内完成
-        while (!process_completed) {
-            // 非阻塞检查子进程状态
-            pid_t result = waitpid(child_pid, &status, WNOHANG);
-            
-            if (result > 0) {
-                // 子进程已完成
-                process_completed = true;
-                if (WIFEXITED(status)) {
-                    SVFUtil::outs() << "子进程 " << child_pid << " 正常完成，退出状态: " << WEXITSTATUS(status) << "\n";
-                } else if (WIFSIGNALED(status)) {
-                    SVFUtil::outs() << "子进程 " << child_pid << " 被信号终止: " << WTERMSIG(status) << "\n";
-                }
-            } else if (result == 0) {
-                // 子进程仍在运行，检查是否超时
-                auto current_time = std::chrono::high_resolution_clock::now();
-                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(current_time - process_start_times[i]);
-                
-                if (elapsed.count() >= TIMEOUT_SECONDS) {
-                    // 超时，强制终止子进程
-                    SVFUtil::errs() << "子进程 " << child_pid << " 超时（" << TIMEOUT_MINUTES << " 分钟），强制终止\n";
-                    
-                    // 先尝试发送SIGTERM信号
-                    if (kill(child_pid, SIGTERM) == 0) {
-                        // 等待2秒给进程清理的机会
-                        sleep(2);
-                        
-                        // 检查进程是否已经终止
-                        if (waitpid(child_pid, &status, WNOHANG) == 0) {
-                            // 进程仍在运行，发送SIGKILL强制终止
-                            SVFUtil::errs() << "子进程 " << child_pid << " 未响应SIGTERM，发送SIGKILL强制终止\n";
-                            kill(child_pid, SIGKILL);
-                            waitpid(child_pid, &status, 0);
-                        }
-                    } else {
-                        SVFUtil::errs() << "无法终止子进程 " << child_pid << "\n";
-                    }
-                    
-                    process_completed = true;
-                    process_killed = true;
-                } else {
-                    sleep(10); // 休眠10秒
-                }
-            } else {
-                // waitpid出错
-                SVFUtil::errs() << "等待子进程 " << child_pid << " 时出错\n";
-                process_completed = true;
-            }
-        }
-        
-        // 读取临时文件中的结果（如果进程未被强杀）
-        if (!process_killed) {
+        // 读取临时文件中的结果
+        if (completed) {
             std::ifstream tempFile(tempFileNames[i]);
             if (tempFile.is_open()) {
                 std::string jsonStr((std::istreambuf_iterator<char>(tempFile)),
@@ -396,16 +382,15 @@ TimeStats analyzeSingleLibrary(const LibraryInfo& lib) {
                 tempFile.close();
                 
                 if (!jsonStr.empty()) {
-                    try {
-                        nlohmann::json resultJson = nlohmann::json::parse(jsonStr);
+                    // 简单的JSON解析，不使用异常处理
+                    nlohmann::json resultJson = nlohmann::json::parse(jsonStr, nullptr, false);
+                    if (!resultJson.is_discarded()) {
                         allResults.push_back(resultJson);
-                    } catch (const std::exception& e) {
-                        SVFUtil::errs() << "解析临时文件JSON时出错: " << e.what() << "\n";
                     }
                 }
             }
         } else {
-            // 进程被强杀，记录空结果或错误信息
+            // 进程被强杀，记录超时结果
             nlohmann::json timeoutResult;
             timeoutResult["function_name"] = "timeout_killed";
             timeoutResult["error"] = "Process killed due to timeout (" + std::to_string(TIMEOUT_MINUTES) + " minutes)";
@@ -485,7 +470,6 @@ int main(int argc, char ** argv)
         // 生产模式：使用多进程
         SVFUtil::outs() << "使用生产模式：多进程处理库\n";
         std::vector<pid_t> child_pids;
-        std::vector<std::chrono::high_resolution_clock::time_point> library_start_times;
         const int LIBRARY_TIMEOUT_MINUTES = 30; // 库级别超时时间：30分钟
         const int LIBRARY_TIMEOUT_SECONDS = LIBRARY_TIMEOUT_MINUTES * 60;
         
@@ -505,74 +489,16 @@ int main(int argc, char ** argv)
                 exit(0); // 子进程完成后退出
             } 
             else {
-                // 父进程，记录子进程PID和启动时间
+                // 父进程，记录子进程PID
                 child_pids.push_back(pid);
-                library_start_times.push_back(std::chrono::high_resolution_clock::now());
                 SVFUtil::outs() << "启动库分析进程 " << pid << " 分析库 " << lib.name 
                                << "，超时限制: " << LIBRARY_TIMEOUT_MINUTES << " 分钟\n";
             }
         }
 
         // 父进程等待所有子进程完成（带超时机制）
-        for (size_t i = 0; i < child_pids.size(); i++) {
-            pid_t child_pid = child_pids[i];
-            int status;
-            bool process_completed = false;
-            bool process_killed = false;
-            
-            while (!process_completed) {
-                // 非阻塞检查子进程状态
-                pid_t result = waitpid(child_pid, &status, WNOHANG);
-                
-                if (result > 0) {
-                    // 子进程已完成
-                    process_completed = true;
-                    if (WIFEXITED(status)) {
-                        SVFUtil::outs() << "库分析进程 " << child_pid << " 正常完成，退出状态: " << WEXITSTATUS(status) << "\n";
-                    } else if (WIFSIGNALED(status)) {
-                        SVFUtil::outs() << "库分析进程 " << child_pid << " 被信号终止: " << WTERMSIG(status) << "\n";
-                    }
-                } else if (result == 0) {
-                    // 子进程仍在运行，检查是否超时
-                    auto current_time = std::chrono::high_resolution_clock::now();
-                    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(current_time - library_start_times[i]);
-                    
-                    if (elapsed.count() >= LIBRARY_TIMEOUT_SECONDS) {
-                        // 超时，强制终止子进程
-                        SVFUtil::errs() << "库分析进程 " << child_pid << " 超时（" << LIBRARY_TIMEOUT_MINUTES << " 分钟），强制终止\n";
-                        
-                        // 先尝试发送SIGTERM信号
-                        if (kill(child_pid, SIGTERM) == 0) {
-                            // 等待5秒给进程清理的机会
-                            sleep(5);
-                            
-                            // 检查进程是否已经终止
-                            if (waitpid(child_pid, &status, WNOHANG) == 0) {
-                                // 进程仍在运行，发送SIGKILL强制终止
-                                SVFUtil::errs() << "库分析进程 " << child_pid << " 未响应SIGTERM，发送SIGKILL强制终止\n";
-                                kill(child_pid, SIGKILL);
-                                waitpid(child_pid, &status, 0);
-                            }
-                        } else {
-                            SVFUtil::errs() << "无法终止库分析进程 " << child_pid << "\n";
-                        }
-                        
-                        process_completed = true;
-                        process_killed = true;
-                    } else {
-                        // 未超时，休眠1秒后继续检查
-                        sleep(1);
-                    }
-                } else {
-                    // waitpid出错
-                    SVFUtil::errs() << "等待库分析进程 " << child_pid << " 时出错\n";
-                    process_completed = true;
-                }
-            }
-            
-            if (process_killed) {
-                SVFUtil::errs() << "库分析进程 " << child_pid << " 因超时被强制终止\n";
-            }
+        for (pid_t child_pid : child_pids) {
+            waitProcessWithTimeout(child_pid, LIBRARY_TIMEOUT_SECONDS, "库分析");
         }
         
         // 在多进程模式下，需要从文件中读取各个库的统计信息
